@@ -4,16 +4,29 @@ import { getWalletStore } from '../store/walletStore'
 import { AddressService } from '../services/addressService'
 import { getWorkletStore } from '../store/workletStore'
 
-type AddressInfo = {
-  address: string
-  network: string
+type AddressIdentifier = {
+  network: string,
   accountIndex: number
 }
 
+export type AddressInfo = AddressIdentifier & {
+  address: string
+}
+
+export type AddressInfoResult = 
+  (AddressIdentifier & {
+    success: true
+    address: string
+  })
+  | (AddressIdentifier & {
+    success: false
+    reason: Error
+  })
+
 export interface UseAddressesReturn {
-  /** A flattened, UI-ready array of all loaded addresses for the active wallet. */
+  /** All loaded addresses for the active wallet. */
   data: AddressInfo[] | undefined
-  /** A simple boolean that is true if ANY address is currently being loaded. */
+  /** True if ANY address is currently being loaded. */
   isLoading: boolean
   /**
    * Triggers a fetch for addresses for the given account indices.
@@ -23,10 +36,9 @@ export interface UseAddressesReturn {
   loadAddresses: (
     accountIndices: number[],
     networks?: string[],
-  ) => Promise<void>
+  ) => Promise<AddressInfoResult[]>
   /**
    * A helper to get a filtered list of addresses for a single network.
-   * Example: `getAddressesForNetwork('eth')`
    */
   getAddressesForNetwork: (
     network: string,
@@ -39,26 +51,30 @@ export interface UseAddressesReturn {
 }
 
 export function useAddresses(): UseAddressesReturn {
-  const { activeWalletId, allAddresses, allWalletLoading } = getWalletStore()(
-    useShallow((state) => ({
-      activeWalletId: state.activeWalletId,
-      allAddresses: state.addresses,
-      allWalletLoading: state.walletLoading,
-    })),
-  )
+  const { activeWalletId, activeAddresses, activeWalletLoading } =
+    getWalletStore()(
+      useShallow((state) => {
+        const activeId = state.activeWalletId
+        
+        if (!activeId) {
+          return {
+            activeWalletId: null,
+            activeAddresses: undefined,
+            activeWalletLoading: undefined,
+          }
+        }
+        
+        return {
+          activeWalletId: activeId,
+          activeAddresses: state.addresses[activeId],
+          activeWalletLoading: state.walletLoading[activeId],
+        }
+      }),
+    )
+
   const wdkConfigs = getWorkletStore()((state) => state.wdkConfigs)
 
-  const { activeAddresses, activeWalletLoading } = useMemo(() => {
-    if (!activeWalletId)
-      return { activeAddresses: undefined, activeWalletLoading: undefined }
-
-    return {
-      activeAddresses: allAddresses[activeWalletId],
-      activeWalletLoading: allWalletLoading[activeWalletId],
-    }
-  }, [activeWalletId, allAddresses, allWalletLoading])
-
-  const data = useMemo(() => {
+  const data = useMemo((): AddressInfo[] | undefined => {
     if (!activeAddresses) return undefined
 
     const flattened = Object.entries(activeAddresses).flatMap(
@@ -80,7 +96,7 @@ export function useAddresses(): UseAddressesReturn {
   }, [activeWalletLoading])
 
   const loadAddresses = useCallback(
-    async (accountIndices: number[], networks?: string[]) => {
+    async (accountIndices: number[], networks?: string[]): Promise<AddressInfoResult[]> => {
       if (!activeWalletId) {
         throw new Error('No active wallet to load addresses for.')
       }
@@ -88,16 +104,53 @@ export function useAddresses(): UseAddressesReturn {
       if (!wdkConfigs) {
         throw new Error('WDK is not initialized.')
       }
+      
+      const allNetworks = Object.values(wdkConfigs.networks).map((n) => n.blockchain)
+      const allNetworksSet = new Set(allNetworks)
+      
+      const invalidNetwork = networks?.filter((network) => !allNetworksSet.has(network))
+      
+      if (invalidNetwork && invalidNetwork?.length > 0) {
+        throw new Error(`Invalid network ${invalidNetwork.join(', ')}.`)
+      }
 
-      const networksToLoad =
-        networks || Object.values(wdkConfigs.networks).map((n) => n.blockchain)
-
-      const loadPromises = accountIndices.flatMap((accountIndex) =>
-        networksToLoad.map((network) =>
-          AddressService.getAddress(network, accountIndex, activeWalletId),
-        ),
+      const networksToLoad = networks || allNetworks
+      
+      const jobs = networksToLoad.flatMap((network) => 
+        accountIndices.map((accountIndex) => ({ network, accountIndex }))
       )
-      await Promise.all(loadPromises)
+
+      const loadPromises = jobs.map(({ network, accountIndex }) => 
+        AddressService.getAddress(network, accountIndex, activeWalletId)
+      )
+      
+      const results = await Promise.allSettled(loadPromises)
+      
+      const formattedResults: AddressInfoResult[] = results.map((result, index) => {
+        const job = jobs[index]
+        
+        if (!job) {
+          throw new Error('Invalid result when loading addresses')
+        }
+        
+        if (result.status === 'fulfilled') {
+          return {
+            success: true,
+            network: job.network,
+            accountIndex: job.accountIndex,
+            address: result.value
+          }
+        } else {
+          return {
+            success: false,
+            network: job.network,
+            accountIndex: job.accountIndex,
+            reason: result.reason instanceof Error ? result.reason : new Error(String(result.reason))
+          }
+        } 
+      })
+
+      return formattedResults
     },
     [activeWalletId, wdkConfigs],
   )
