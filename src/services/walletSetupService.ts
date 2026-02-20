@@ -8,7 +8,7 @@ import {
   type CachedCredentials
 } from '../store/workletStore'
 import { WorkletLifecycleService } from './workletLifecycleService'
-import { DEFAULT_MNEMONIC_WORD_COUNT } from '../utils/constants'
+import { DEFAULT_MNEMONIC_WORD_COUNT, DEFAULT_WALLET_IDENTIFIER } from '../utils/constants'
 import { log, logError } from '../utils/logger'
 
 /**
@@ -57,7 +57,7 @@ export class WalletSetupService {
    * Get cache key for walletId
    */
   private static getCacheKey(walletId?: string): string {
-    return walletId || 'default'
+    return walletId || DEFAULT_WALLET_IDENTIFIER
   }
 
   /**

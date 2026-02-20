@@ -73,8 +73,6 @@ export interface WalletInfo {
   identifier: string
   /** Whether wallet exists in secure storage */
   exists: boolean
-  /** Whether this wallet is currently active/initialized */
-  isActive: boolean
 }
 
 /**
