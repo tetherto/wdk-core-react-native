@@ -93,5 +93,6 @@ export const QUERY_KEY_TAGS = {
   WALLET: 'wallet',
   NETWORK: 'network',
   TOKEN: 'token',
+  TRANSFER_FEE: 'transferFee',
 } as const
 
