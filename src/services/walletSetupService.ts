@@ -258,6 +258,7 @@ export class WalletSetupService {
     const secureStorage = this.getSecureStorage()
     const cacheKey = this.getCacheKey(walletId)
     const cached = getCachedCredentials(cacheKey)
+    const requireBiometrics = getWorkletStore().getState().requireBiometrics ?? true
 
     // Return from cache if available
     if (cached?.encryptionKey && cached?.encryptedSeed) {
@@ -267,9 +268,8 @@ export class WalletSetupService {
       }
     }
 
-    // Get credentials from secureStorage (triggers biometrics for encryption key)
     const encryptedSeed = await secureStorage.getEncryptedSeed(walletId)
-    const encryptionKey = await secureStorage.getEncryptionKey(walletId)
+    const encryptionKey = await secureStorage.getEncryptionKey(walletId, { requireBiometrics })
 
     if (!encryptionKey) {
       throw new Error('Encryption key not found. Authentication may have failed or wallet does not exist.')
