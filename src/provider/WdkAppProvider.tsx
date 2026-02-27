@@ -156,6 +156,7 @@ export interface WdkAppProviderProps<
   wdkConfigs: WdkConfigs<TNetwork, TProtocol>
   /** Enable automatic wallet initialization on app restart (default: true) */
   enableAutoInitialization?: boolean
+  requireBiometrics?: boolean
   /**
    * Current user's identifier (typically email)
    * Auto-initialization will NOT proceed if:
@@ -220,6 +221,7 @@ export function WdkAppProvider<
   bundle: bundleConfig,
   wdkConfigs,
   enableAutoInitialization = true,
+  requireBiometrics = true,
   currentUserId,
   clearSensitiveDataOnBackground = false,
   children,
@@ -476,6 +478,7 @@ export function WdkAppProvider<
       try {
         log('[WdkAppProvider] Starting worklet initialization...')
         await WorkletLifecycleService.startWorklet(wdkConfigs, bundleConfig)
+        WalletSetupService.setRequireBiometrics(requireBiometrics)
         if (!cancelled) {
           log('[WdkAppProvider] Worklet started successfully')
         }
