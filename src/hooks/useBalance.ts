@@ -103,23 +103,6 @@ export interface RefreshBalanceParams {
 }
 
 /**
- * Config for transfer fee estimation (app-provided).
- * The app is responsible for all network-specific branching logic.
- * Returns fee in raw/smallest units (e.g. wei, satoshi).
- */
-export interface TransferFeeEstimationConfig {
-  /** App-provided function to fetch the raw fee for a transfer. */
-  quoteFee: (network: string, accountIndex: number, asset: IAsset) => Promise<number>
-}
-
-/**
- * Options for the transfer fee estimation query (same interface as balance queries).
- */
-export interface TransferFeeEstimationOptions extends BalanceQueryOptions {
-  config?: TransferFeeEstimationConfig
-}
-
-/**
  * Query key factory for balance queries
  */
 export const balanceQueryKeys = {
@@ -130,9 +113,6 @@ export const balanceQueryKeys = {
     [QUERY_KEY_TAGS.BALANCES, QUERY_KEY_TAGS.WALLET, walletId, accountIndex, QUERY_KEY_TAGS.NETWORK, network] as const,
   byToken: (walletId: string, accountIndex: number, network: string, assetId: string) =>
     [QUERY_KEY_TAGS.BALANCES, QUERY_KEY_TAGS.WALLET, walletId, accountIndex, QUERY_KEY_TAGS.NETWORK, network, QUERY_KEY_TAGS.TOKEN, assetId] as const,
-  /** Key for transfer fee estimation (preload) per token. Same scope as byToken. */
-  transferFee: (walletId: string, accountIndex: number, network: string, assetId: string) =>
-    [QUERY_KEY_TAGS.BALANCES, QUERY_KEY_TAGS.WALLET, walletId, accountIndex, QUERY_KEY_TAGS.NETWORK, network, QUERY_KEY_TAGS.TOKEN, assetId, QUERY_KEY_TAGS.TRANSFER_FEE] as const,
 }
 
 /**
@@ -275,20 +255,6 @@ async function fetchBalance(
 }
 
 /**
- * Fetch transfer fee estimation for an asset (preload).
- * All network-specific logic is delegated to config.quoteFee (app side).
- * Returns fee in raw/smallest units (e.g. wei, satoshi).
- */
-async function fetchTransferFeeEstimation(
-  network: string,
-  accountIndex: number,
-  asset: IAsset,
-  config: TransferFeeEstimationConfig
-): Promise<number> {
-  return config.quoteFee(network, accountIndex, asset)
-}
-
-/**
  * Hook to fetch a single balance
  * 
  * @param network - Network name
@@ -346,45 +312,6 @@ export function useBalance(
     staleTime: options?.staleTime ?? DEFAULT_QUERY_STALE_TIME_MS,
     gcTime: DEFAULT_QUERY_GC_TIME_MS,
     initialData,
-  })
-}
-
-/**
- * Hook to fetch transfer fee estimation (preload) for an asset.
- * Uses the same TanStack Query interface as useBalance: queryKey, queryFn, enabled, staleTime.
- * Transfer cost is the same for any recipient/amount, so we quote with placeholder + 1 unit.
- * Fee is returned in token units; multiply by token price for USD.
- *
- * @param network - Network name
- * @param accountIndex - Account index
- * @param asset - Asset (must implement IAsset; getSymbol/getDecimals used)
- * @param options - Query options and config (config required for EVM)
- * @returns TanStack Query result with TransferFeeEstimationResult
- */
-export function useTransferFeeEstimation(
-  network: string,
-  accountIndex: number,
-  asset: IAsset,
-  options?: TransferFeeEstimationOptions
-) {
-  const workletStore = getWorkletStore()
-  const walletStore = getWalletStore()
-  const isInitialized = workletStore.getState().isInitialized
-  const walletId = walletStore.getState().activeWalletId
-  const config = options?.config
-  const assetId = asset.getId()
-
-  const enabled =
-    isQueryEnabled(options?.enabled, isInitialized) &&
-    config != null &&
-    walletId != null
-
-  return useQuery({
-    queryKey: balanceQueryKeys.transferFee(walletId ?? '', accountIndex, network, assetId),
-    queryFn: () => fetchTransferFeeEstimation(network, accountIndex, asset, config!),
-    enabled,
-    staleTime: options?.staleTime ?? DEFAULT_QUERY_STALE_TIME_MS,
-    gcTime: DEFAULT_QUERY_GC_TIME_MS,
   })
 }
 

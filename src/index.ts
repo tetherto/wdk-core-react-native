@@ -33,13 +33,7 @@ export {
   useBalance,
   useBalancesForWallet,
   useRefreshBalance,
-  useTransferFeeEstimation,
   balanceQueryKeys,
-} from './hooks/useBalance'
-
-export type {
-  TransferFeeEstimationConfig,
-  TransferFeeEstimationOptions,
 } from './hooks/useBalance'
 
 export type { AccountInfo } from './store/walletStore'
