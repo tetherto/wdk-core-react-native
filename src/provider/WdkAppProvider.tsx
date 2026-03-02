@@ -30,7 +30,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createSecureStorage } from '@tetherto/wdk-react-native-secure-storage'
 
 import { useWalletManager } from '../hooks/useWalletManager'
-import { useWorklet } from '../hooks/useWorklet'
+import { useWorklet } from '../hooks/internal/useWorklet'
 import { getWalletStore } from '../store/walletStore'
 import type { WalletStore } from '../store/walletStore'
 import {

@@ -4,7 +4,7 @@ import { WorkletLifecycleService } from '../../services/workletLifecycleService'
 import { WalletSetupService } from '../../services/walletSetupService'
 import { normalizeError } from '../../utils/errorUtils'
 import { log, logError } from '../../utils/logger'
-import { useWorklet } from '../useWorklet'
+import { useWorklet } from './useWorklet'
 
 export interface UseWorkletInitializerProps<
   TNetwork extends Record<string, unknown> = Record<string, unknown>,
