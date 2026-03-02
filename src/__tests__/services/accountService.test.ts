@@ -54,7 +54,7 @@ describe('AccountService', () => {
         methodName: 'getBalance',
         network: 'ethereum',
         accountIndex: 0,
-        args: null,
+        args: '[]',
       })
     })
 
@@ -77,15 +77,13 @@ describe('AccountService', () => {
         methodName: 'signMessage',
         network: 'ethereum',
         accountIndex: 0,
-        args: JSON.stringify(mockArgs),
+        args: JSON.stringify([mockArgs]),
       })
     })
 
     it('should handle array arguments for multi-param methods', async () => {
-      // Test array args for methods like transfer(options, config)
       const mockArgs = [
-        { to: '0x123', amount: '1000' },  // options (1st arg)
-        { paymasterToken: '0xabc', transferMaxFee: '100' }  // config (2nd arg)
+        { recipient: '0x123', amount: '1000', token: '0x123' }
       ]
       const mockResult = { txHash: '0x456' }
       mockHRPC.callMethod.mockResolvedValue({
@@ -243,7 +241,7 @@ describe('AccountService', () => {
         methodName: 'signMessage',
         network: 'ethereum',
         accountIndex: 0,
-        args: JSON.stringify(mockArgs),
+        args: JSON.stringify([mockArgs]),
       })
     })
 
