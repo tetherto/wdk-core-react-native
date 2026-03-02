@@ -14,18 +14,6 @@ import { withOperationMutex } from '../utils/operationMutex'
 import { useShallow } from 'zustand/shallow'
 import { DEFAULT_WALLET_IDENTIFIER } from '../utils/constants'
 
-// export interface AccountDisplayInfo {
-//   addresses: Record<string, string>
-//   accountIndex: number
-//   derivationPath: string
-// }
-
-// export interface WalletInfo {
-//   walletId: string
-//   name: string
-//   accounts: AccountDisplayInfo[]
-// }
-
 export type { WalletInfo }
 
 export interface UseWalletManagerResult {
@@ -96,11 +84,6 @@ export interface UseWalletManagerResult {
   /** Get encrypted entropy from cache or secure storage. */
   getEncryptedEntropy: (walletId: string) => Promise<string | null>
 
-  /** Load existing wallet credentials. */
-  loadExistingWallet: (
-    walletId: string,
-  ) => Promise<{ encryptionKey: string; encryptedSeed: string }>
-
   /** Generate entropy and encrypt (for creating new wallets). */
   generateEntropyAndEncrypt: (wordCount?: 12 | 24) => Promise<{
     encryptionKey: string
@@ -120,9 +103,6 @@ export interface UseWalletManagerResult {
     encryptedSeedBuffer: string
     encryptedEntropyBuffer: string
   }>
-
-  /** Refresh the wallet list. */
-  refreshWalletList: (knownIdentifiers?: string[]) => Promise<void>
 }
 
 export function useWalletManager(): UseWalletManagerResult {
@@ -433,26 +413,6 @@ export function useWalletManager(): UseWalletManagerResult {
   )
 
   /**
-   * Load existing wallet credentials from secure storage
-   * Requires biometric authentication if not cached
-   *
-   * @returns Promise resolving to credentials object with encryptionKey and encryptedSeed
-   */
-  const loadExistingWallet = useCallback(
-    async (
-      walletId: string,
-    ): Promise<{ encryptionKey: string; encryptedSeed: string }> => {
-      try {
-        return await WalletSetupService.loadExistingWallet(walletId)
-      } catch (err) {
-        logError('Failed to load existing wallet:', err)
-        throw err
-      }
-    },
-    [],
-  )
-
-  /**
    * Generate entropy and encrypt (for creating new wallets)
    */
   const generateEntropyAndEncrypt = useCallback(
@@ -702,8 +662,6 @@ export function useWalletManager(): UseWalletManagerResult {
       getEncryptionKey,
       getEncryptedSeed,
       getEncryptedEntropy,
-      loadExistingWallet,
-      refreshWalletList,
     }),
     [
       unlock,
@@ -723,8 +681,6 @@ export function useWalletManager(): UseWalletManagerResult {
       getEncryptionKey,
       getEncryptedSeed,
       getEncryptedEntropy,
-      loadExistingWallet,
-      refreshWalletList,
       activeWalletId,
       wallets,
       status,
