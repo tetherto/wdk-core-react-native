@@ -332,7 +332,7 @@ export function useWalletOrchestrator({
       return { status: 'ERROR', error: topLevelError }
     }
 
-    if (walletLoadingState.type === 'ready' && activeWalletId) {
+    if (isWorkletInitialized && activeWalletId) {
       return { status: 'READY', walletId: activeWalletId }
     }
 
@@ -345,7 +345,13 @@ export function useWalletOrchestrator({
     }
 
     return { status: 'INITIALIZING' }
-  }, [workletError, walletLoadingState, isWorkletStarted, activeWalletId])
+  }, [
+    workletError,
+    walletLoadingState,
+    isWorkletInitialized,
+    isWorkletStarted,
+    activeWalletId,
+  ])
 
   return {
     state,
