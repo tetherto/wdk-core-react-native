@@ -5,6 +5,48 @@ import type { IAsset } from '../types'
 import { BalanceFetchResult } from '../types'
 import { convertBalanceToString } from '../utils/balanceUtils'
 import { useAddressLoader } from './useAddressLoader'
+import { getWorkletStore } from 'src/store/workletStore'
+import { useShallow } from 'zustand/shallow'
+
+/**
+ * Returns a promise that resolves when the wallet worklet is initialized.
+ * Rejects on timeout or if an initialization error occurs in the store.
+ * @param timeout - Timeout in milliseconds.
+ */
+function whenInitialized(timeout = 10000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const store = getWorkletStore()
+
+    if (store.getState().isInitialized) {
+      return resolve()
+    }
+
+    const timeoutId = setTimeout(() => {
+      unsubscribe()
+      reject(
+        new Error(
+          '[whenInitialized] Timed out waiting for wallet initialization.',
+        ),
+      )
+    }, timeout)
+
+    const unsubscribe = store.subscribe((state) => {
+      if (state.isInitialized) {
+        clearTimeout(timeoutId)
+        unsubscribe()
+        resolve()
+      } else if (state.error) {
+        clearTimeout(timeoutId)
+        unsubscribe()
+        reject(
+          new Error(
+            `[whenInitialized] Wallet initialization failed: ${state.error}`,
+          ),
+        )
+      }
+    })
+  })
+}
 
 export type UseAccountParams = {
   accountIndex: number
@@ -67,8 +109,6 @@ export interface UseAccountReturn<T extends object> {
   
   /**
    * Query fee for a transaction.
-   * All params are optional — if not provided, falls back to the account's own
-   * address for `to` and '1' (smallest unit) for `amount`.
    */
   estimateFee: (params: TransactionParams) => Promise<Omit<TransactionResult, 'hash'>>
 
@@ -89,6 +129,11 @@ export function useAccount<T extends object = {}>(
 ): UseAccountReturn<T> {
   const { address, isLoading, error: addressLoaderError } = useAddressLoader(accountParams)
   const activeWalletId = getWalletStore()((state) => state.activeWalletId)
+  const { isInitialized } = getWorkletStore()(
+    useShallow((state) => ({
+      isInitialized: state.isInitialized,
+    })),
+  )
   
   const activeWalletError = useMemo(() => {
     if (!activeWalletId) {
@@ -100,14 +145,20 @@ export function useAccount<T extends object = {}>(
 
   const account = useMemo(
     () =>
-      activeWalletId && address
+      activeWalletId && address && isInitialized
         ? {
             accountIndex: accountParams.accountIndex,
             network: accountParams.network,
             walletId: activeWalletId,
           }
         : null,
-    [accountParams.accountIndex, accountParams.network, activeWalletId, address],
+    [
+      accountParams.accountIndex,
+      accountParams.network,
+      activeWalletId,
+      address,
+      isInitialized,
+    ],
   )
   
   const accountRef = useRef(account)
@@ -290,18 +341,29 @@ export function useAccount<T extends object = {}>(
   )
   
   const estimateFee = useCallback(
-    async (params: TransactionParams): Promise<Omit<TransactionResult, 'hash'>> => {
+    async (
+      params: TransactionParams,
+    ): Promise<Omit<TransactionResult, 'hash'>> => {
+      if (!address || !activeWalletId || !isInitialized) {
+        return {
+          success: false,
+          error: 'Cannot estimate fee: account is not active or not initialized.',
+          fee: '',
+        }
+      }
+
       if (params.asset.isNative()) {
-        const feeResponse = await AccountService.callAccountMethod<'quoteSendTransaction'>(
-          accountParams.network,
-          accountParams.accountIndex,
-          'quoteSendTransaction',
-          { to: params.to, value: params.amount },
-        )
-        
+        const feeResponse =
+          await AccountService.callAccountMethod<'quoteSendTransaction'>(
+            accountParams.network,
+            accountParams.accountIndex,
+            'quoteSendTransaction',
+            { to: params.to, value: params.amount },
+          )
+
         return {
           success: true,
-          ...feeResponse
+          ...feeResponse,
         }
       }
 
@@ -311,23 +373,29 @@ export function useAccount<T extends object = {}>(
         return {
           success: false,
           error: 'Token address cannot be null',
-          fee: ''
+          fee: '',
         }
       }
 
-      const feeResponse =  await AccountService.callAccountMethod<'quoteTransfer'>(
+      const feeResponse = await AccountService.callAccountMethod<'quoteTransfer'>(
         accountParams.network,
         accountParams.accountIndex,
         'quoteTransfer',
         { recipient: params.to, amount: params.amount, token: tokenAddress },
       )
-      
+
       return {
         success: true,
-        ...feeResponse
+        ...feeResponse,
       }
     },
-    [accountParams.network, accountParams.accountIndex, address],
+    [
+      accountParams.network,
+      accountParams.accountIndex,
+      address,
+      activeWalletId,
+      isInitialized,
+    ],
   )
 
   const extension = useCallback((): T => {
@@ -335,15 +403,18 @@ export function useAccount<T extends object = {}>(
       get: (_target, prop) => {
         // Avoid issues with promise-like checks on the proxy itself
         if (prop === 'then') {
-          return undefined;
+          return undefined
         }
-        
+
         return async (...args: unknown[]) => {
-          const currentAccount = accountRef.current;
+          // Wait for the wallet to be fully initialized.
+          await whenInitialized()
+
+          const currentAccount = accountRef.current
 
           if (!currentAccount) {
             console.error(
-              `[useAccount] Cannot call extension method: no active account.`,
+              '[useAccount] Extension call failed: Account is not available even after wallet initialization.',
             )
             return undefined
           }
@@ -387,7 +458,6 @@ export function useAccount<T extends object = {}>(
       send,
       sign,
       verify,
-      estimateFee,
       extension,
     ],
   )
