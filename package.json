@@ -1,6 +1,6 @@
 {
   "name": "@tetherto/wdk-react-native-core",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "Core functionality for React Native wallets - wallet management, balance fetching, and worklet operations",
   "type": "module",
   "main": "./dist/index.js",
@@ -53,7 +53,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@tetherto/wdk-react-native-secure-storage": "github:nampc1/wdk-react-native-secure-storage-fork#abfd2b32b06bd6c3d439dfec4ffdec885602531d",
+    "@tetherto/wdk-react-native-secure-storage": "github:tetherto/wdk-react-native-secure-storage#5977ef5ddac299eda0a1990d422dc3e9bcd86f3e",
     "@tetherto/pear-wrk-wdk": "github:tetherto/pear-wrk-wdk#v2",
     "@tanstack/react-query": "^5.0.0",
     "expo-crypto": "^15.0.8",

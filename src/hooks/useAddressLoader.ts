@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { AddressService } from '../services/addressService'
 import { getWalletStore } from '../store/walletStore'
 import { logError } from '../utils/logger'
-import { getWorkletStore } from 'src/store/workletStore'
+import { getWorkletStore } from '../store/workletStore'
 
 export interface UseAddressLoaderParams {
   network: string
