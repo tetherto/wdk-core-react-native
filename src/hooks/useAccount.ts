@@ -5,7 +5,7 @@ import type { IAsset } from '../types'
 import { BalanceFetchResult } from '../types'
 import { convertBalanceToString } from '../utils/balanceUtils'
 import { useAddressLoader } from './useAddressLoader'
-import { getWorkletStore } from 'src/store/workletStore'
+import { getWorkletStore } from '../store/workletStore'
 import { useShallow } from 'zustand/react/shallow'
 
 /**
