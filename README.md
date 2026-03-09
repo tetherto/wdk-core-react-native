@@ -1,6 +1,8 @@
 # @tetherto/wdk-react-native-core
 
-Core functionality for React Native wallets - wallet management, balance fetching, and worklet operations.
+Core functionality for React Native wallets, providing wallet management, balance fetching, and more.
+
+This library uses a unique **worklet bundle** to run intensive cryptographic operations on a separate thread, ensuring your app's UI remains fast and responsive.
 
 ## Features
 
@@ -22,16 +24,6 @@ Core functionality for React Native wallets - wallet management, balance fetchin
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
-
-## Quick Start
-
-Getting started involves three main steps:
-
-1.  **Configuration:** Define your networks and generate the worklet bundle.
-2.  **Provider Setup:** Wrap your application in `WdkAppProvider` and pass it your configuration.
-3.  **Use the Hooks:** Use hooks like `useWalletManager` and `useAddresses` to manage the wallet and access its data.
-
-➡️ **For a complete, copy-pasteable example, see the [Full Quick Start Guide](docs/quick-start.md).**
 
 ## Installation
 
@@ -66,70 +58,44 @@ Running wallet operations in a separate thread is crucial for performance. It en
 To get the bundle, use the `@tetherto/wdk-worklet-bundler` CLI to generate one with only the blockchain modules you need:
 
 ```bash
-# 1. Install the bundler CLI
-npm install -g @tetherto/wdk-worklet-bundler
-
-# 2. Initialize configuration in your React Native project
+# 1. Initialize configuration in your React Native project
 wdk-worklet-bundler init
 
-# 3. Edit wdk.config.js to configure your networks (see example below)
+# 2. Edit wdk.config.js to configure your networks (see example below)
 
-# 4. Install required WDK modules
-npm install @tetherto/wdk @tetherto/wdk-wallet-evm-erc-4337
-
-# 5. Generate the bundle
+# 3. Generate the bundle
 wdk-worklet-bundler generate
 ```
 
 Example `wdk.config.js`:
-
 ```javascript
+// wdk.config.js
 module.exports = {
-  modules: {
-    core: '@tetherto/wdk',
-    erc4337: '@tetherto/wdk-wallet-evm-erc-4337',
-  },
+  // Define the networks you want to support and their corresponding packages.
   networks: {
     ethereum: {
-      module: 'erc4337',
-      chainId: 1,
-      blockchain: 'ethereum',
-      provider: 'https://eth.drpc.org',
+      package: '@tetherto/wdk-wallet-evm-erc-4337'
     },
-    polygon: {
-      module: 'erc4337',
-      chainId: 137,
-      blockchain: 'polygon',
-      provider: 'https://polygon.drpc.org',
-    },
-  },
-}
+    bitcoin: {
+      package: '@tetherto/wdk-wallet-btc'
+    }
+  }
+};
 ```
 
-After running `wdk-worklet-bundler generate`, import and use the bundle in `WdkAppProvider`:
+After running `wdk-worklet-bundler generate`, you will see the bundle in the directory `.wdk`.
 
-```typescript
-import { bundle } from './.wdk'
+For the full bundler documentation, see [wdk-worklet-bundler](https://github.com/tetherto/wdk-worklet-bundler).
 
-<WdkAppProvider
-  bundle={{ bundle }}
-  wdkConfigs={wdkConfigs}
->
-  <App />
-</WdkAppProvider>
-```
+## Quick Start
 
-For full bundler documentation, see [wdk-worklet-bundler](https://github.com/tetherto/wdk-worklet-bundler).
+Getting started involves three main steps:
 
-### TypeScript Configuration
+1.  **Configuration:** Define your networks and generate the worklet bundle.
+2.  **Provider Setup:** Wrap your application in `WdkAppProvider` and pass it your configuration.
+3.  **Use the Hooks:** Use hooks like `useWalletManager` and `useAddresses` to manage the wallet and access its data.
 
-If using a generated bundle, add the `.wdk` folder to your TypeScript includes:
-
-```json
-{
-  "include": ["**/*.ts", "**/*.tsx", ".wdk/**/*"]
-}
-```
+➡️ **For a complete, copy-pasteable example, see the [Full Quick Start Guide](docs/quick-start.md).**
 
 ## Core Concepts
 

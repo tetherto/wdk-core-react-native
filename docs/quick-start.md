@@ -1,63 +1,16 @@
 # Quick Start: A Complete Example
 
-This document provides a complete, copy-pasteable example for setting up the WDK and running your first component.
+This document provides a complete, copy-pasteable code example for setting up and using the WDK.
 
-## Step 1: Generate the Worklet Bundle
-
-The WDK relies on a worklet bundle for its core logic. Use the `@tetherto/wdk-worklet-bundler` to generate it.
-
-### 1a. Install Tools and Modules
-First, install the bundler and the required WDK modules.
-
-```bash
-# Install the bundler CLI globally
-npm install -g @tetherto/wdk-worklet-bundler
-
-# Install required WDK modules in your project
-npm install @tetherto/wdk @tetherto/wdk-wallet-evm-erc-4337
-```
-
-### 1b. Create `wdk.config.js`
-Run the `init` command to create a `wdk.config.js` file in your project's root. This file defines the networks and modules for your bundle.
-
-```bash
-wdk-worklet-bundler init
-```
-
-For this example, your `wdk.config.js` should look like this:
-
-```javascript
-// wdk.config.js
-module.exports = {
-  modules: {
-    core: '@tetherto/wdk',
-    erc4337: '@tetherto/wdk-wallet-evm-erc-4337',
-  },
-  networks: {
-    ethereum: {
-      module: 'erc4337',
-      chainId: 1,
-      blockchain: 'ethereum',
-      provider: 'https://eth.drpc.org',
-    },
-  },
-};
-```
-
-### 1c. Generate the Bundle
-Run the `generate` command:
-
-```bash
-wdk-worklet-bundler generate
-```
-
-You should now see a **`.wdk`** directory in your project root. This contains the `bundle.js` that you will import in your app.
+**Prerequisites:** Before using this guide, make sure you have already followed the **Installation** and **Bundle Configuration** steps in the main `README.md`. You should have:
+1.  The necessary packages installed.
+2.  A `.wdk` directory containing your generated worklet bundle.
 
 ---
 
-## Step 2: Configure Runtime Providers
+## Step 1: Configure Your Runtime Providers
 
-Create a configuration file for the runtime providers that will be used in your app. This should match the networks you defined in `wdk.config.js`.
+Create a configuration file (e.g., `src/config.ts`) that defines the runtime providers for the networks you included in your worklet bundle.
 
 ```typescript
 // src/config.ts
@@ -76,9 +29,9 @@ export const wdkConfigs = {
 
 ---
 
-## Step 3: Main Application Entry Point (`App.tsx`)
+## Step 2: Build Your App Component
 
-Finally, import the generated bundle and your configs into your main app component and use the WDK hooks.
+In your main application file (e.g., `App.tsx`), import the `bundle`, your `wdkConfigs`, and the WDK hooks. Then, wrap your app in the `WdkAppProvider` and use the hooks to build your wallet logic.
 
 ```typescript
 // App.tsx
