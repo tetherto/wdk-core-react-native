@@ -165,6 +165,11 @@ export function useWalletManager(): UseWalletManagerResult {
 
   const unlock = useCallback(
     async (walletId?: string) => {
+      if (walletStore.getState().walletLoadingState.type === 'ready') {
+        log('[useWalletManager] Skipping unlock, wallet is already ready.')
+        return
+      }
+
       if (walletId) {
         clearTemporaryWallet()
         walletStore.setState({ activeWalletId: walletId })
