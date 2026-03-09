@@ -2,6 +2,14 @@
 
 Core functionality for React Native wallets - wallet management, balance fetching, and worklet operations.
 
+## Features
+
+- **⛓️ Multi-Chain Support:** Manage wallets across different EVM-based networks.
+- **🧩 Extensible Architecture:** Add support for new blockchains and account types via worklets.
+- **🔐 Secure Storage:** Automatic encryption and secure keychain storage for sensitive data.
+- **⚛️ Modern React Hooks:** A simple, powerful API for integrating wallet features into your React Native app.
+- **📦 Lightweight & Modular:** Generate optimized bundles with only the chains you need.
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -17,68 +25,13 @@ Core functionality for React Native wallets - wallet management, balance fetchin
 
 ## Quick Start
 
-```typescript
-import { WdkAppProvider, useWdkApp, useWallet, useBalance, BaseAsset } from '@tetherto/wdk-react-native-core'
-// Import bundle from your generated .wdk folder (see Bundle Configuration)
-import { bundle } from './.wdk'
+Getting started involves three main steps:
 
-function App() {
-  const wdkConfigs = {
-    networks: {
-      ethereum: {
-        blockchain: 'ethereum',
-        // Network-specific configurations go inside config
-        config: {
-          chainId: 1,
-          provider: 'https://eth.drpc.org'
-        }
-      }
-    }
-  }
+1.  **Configuration:** Define your networks and generate the worklet bundle.
+2.  **Provider Setup:** Wrap your application in `WdkAppProvider` and pass it your configuration.
+3.  **Use the Hooks:** Use hooks like `useWalletManager` and `useAddresses` to manage the wallet and access its data.
 
-  return (
-    <WdkAppProvider
-      bundle={{ bundle }}
-      wdkConfigs={wdkConfigs}
-    >
-      <WalletScreen />
-    </WdkAppProvider>
-  )
-}
-
-// Define your assets
-const ethAsset = new BaseAsset({
-  id: 'eth',
-  network: 'ethereum',
-  symbol: 'ETH',
-  name: 'Ethereum',
-  decimals: 18,
-  isNative: true,
-  address: null
-})
-
-function WalletScreen() {
-  const { status, isReady } = useWdkApp()
-  const { addresses } = useWallet()
-  
-  // Use the asset object for balance fetching
-  const { data: balance, isLoading } = useBalance(
-    'ethereum', // network
-    0,          // accountIndex
-    ethAsset    // asset
-  )
-
-  if (!isReady) return <Text>Loading...</Text>
-
-  return (
-    <View>
-      <Text>Address: {addresses.ethereum?.[0]}</Text>
-      <Text>Balance: {balance?.balance || '0'}</Text>
-      {isLoading && <Text>Updating...</Text>}
-    </View>
-  )
-}
-```
+➡️ **For a complete, copy-pasteable example, see the [Full Quick Start Guide](docs/quick-start.md).**
 
 ## Installation
 
@@ -442,24 +395,6 @@ function AccountOperations() {
 }
 ```
 
-### Multiple Wallets
-
-```typescript
-import { useWallet } from '@tetherto/wdk-react-native-core'
-
-function MultiWalletApp() {
-  const wallet1 = useWallet({ identifier: 'wallet-1' })
-  const wallet2 = useWallet({ identifier: 'wallet-2' })
-
-  return (
-    <View>
-      <Text>Wallet 1: {wallet1.addresses.ethereum?.[0]}</Text>
-      <Text>Wallet 2: {wallet2.addresses.ethereum?.[0]}</Text>
-    </View>
-  )
-}
-```
-
 ### Refreshing Balances
 
 ```typescript
@@ -575,153 +510,21 @@ interface UseWalletManagerResult {
 }
 ```
 
-### Allowed Account Methods
-
-For security, only these methods can be called via `callAccountMethod`:
-
-- `getAddress` - Get wallet address
-- `getBalance` - Get native token balance
-- `getTokenBalance` - Get ERC20 token balance
-- `signMessage` - Sign a message
-- `signTransaction` - Sign a transaction
-- `sendTransaction` - Send a transaction
-
 ## Architecture
 
-```
-┌─────────────────────────────────────┐
-│         App Layer (Hooks)           │
-│  useWallet, useBalance, useWdkApp   │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│      Provider Layer                  │
-│      WdkAppProvider                  │
-│  (Consolidated state sync effect)    │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│      Service Layer                    │
-│  WorkletLifecycleService              │
-│  AddressService                       │
-│  AccountService                       │
-│  BalanceService                       │
-│  WalletSetupService                   │
-│  WalletSwitchingService               │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│      State Management                 │
-│  WorkletStore (Zustand)               │
-│  WalletStore (Zustand)                │
-│  TanStack Query (Balances)            │
-│  Operation Mutex (Race prevention)    │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│      Storage Layer                   │
-│  MMKV (non-sensitive)                │
-│  SecureStorage (sensitive)           │
-└─────────────────────────────────────┘
-```
-
-### State Synchronization
-
-The `WdkAppProvider` uses a **consolidated effect** for wallet state synchronization to prevent race conditions. Multiple interdependent state changes (activeWalletId, addresses, loadingState, errors) must be evaluated atomically in a single effect. See [WALLET_STATE_MACHINE.md](src/store/WALLET_STATE_MACHINE.md) for detailed state machine documentation.
-
-### Key Services
-
-- **WorkletLifecycleService**: Manages worklet lifecycle (start, initialize, cleanup)
-- **AddressService**: Handles address retrieval and caching
-- **AccountService**: Handles account method calls with whitelist validation
-- **BalanceService**: Manages balance operations
-- **WalletSetupService**: Handles wallet creation, import, and credential management
+See [Architecture](docs/architecture.md) for details on the internal design.
 
 ## Security
 
-### Storage Encryption
-
-- **MMKV Storage**: Uses cryptographic key derivation for non-sensitive data
-- **Secure Storage**: Uses device keychain with biometric authentication for sensitive data
-- **Memory Management**: Sensitive data is automatically cleared when app is backgrounded
-
-### Security Features
-
-- ✅ Method whitelist validation (only approved methods can be called)
-- ✅ Input validation and sanitization
-- ✅ Error message sanitization (prevents information leakage)
-- ✅ Automatic credential cache expiration (TTL: 5 minutes, LRU eviction at 15 entries)
-- ✅ Safe JSON stringification (prevents prototype pollution)
-- ✅ Runtime type validation with Zod schemas
-- ✅ Operation mutex with timeout protection (prevents stuck operations)
-- ✅ Automatic sensitive data cleanup on app background
-
-### Best Practices
-
-1. Always use `WdkAppProvider` at app root
-2. Validate inputs before use (use provided validation utilities)
-3. Never log sensitive data
-4. Use error boundaries to handle errors gracefully
-5. Sensitive data is automatically cleared on app background
+See [Security](docs/security.md) for details on security features and best practices.
 
 ## Troubleshooting
 
-### Wallet Initialization Fails
-
-**Symptoms**: `status` is `ERROR`, `error` is set
-
-**Solutions**:
-1. Check that `wdkConfigs` are valid (use `validateWdkConfigs()`)
-2. Check console logs for detailed error messages
-3. Try calling `retry()` method from context
-
-**Common Errors**:
-- "WDK not initialized" → Worklet failed to start, check network configs
-- "Biometric authentication required" → User cancelled or device doesn't support biometrics
-- "Encryption key not found" → Secure storage issue, may need to recreate wallet
-
-### Balance Fetching Issues
-
-**Symptoms**: Balances not updating, `isLoading` stuck true
-
-**Solutions**:
-1. Verify `asset` properties are correct (especially address and network)
-2. Check network connectivity and RPC endpoint availability
-3. Ensure wallet is initialized (`status === 'READY'`)
-4. Check token addresses are valid Ethereum addresses
-
-### Type Validation Errors
-
-**Symptoms**: Runtime errors about invalid types
-
-**Solutions**:
-1. Use `validateWdkConfigs()` before passing to provider
-2. Ensure token addresses match Ethereum address format
-3. Verify account indices are non-negative integers
-4. Use type guards from exports for runtime validation
+See [Troubleshooting](docs/troubleshooting.md) for common issues and solutions.
 
 ## Development
 
-### Building
-
-```bash
-npm run build
-npm run build:strict  # Strict mode (fails on errors)
-```
-
-### Testing
-
-```bash
-npm test
-npm run test:coverage  # 100% coverage required
-npm run test:watch
-```
-
-### Type Checking
-
-```bash
-npm run typecheck
-```
+See the [Contributing Guide](CONTRIBUTING.md) for details on how to build, test, and contribute to this project.
 
 ## License
 
