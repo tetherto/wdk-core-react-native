@@ -50,7 +50,6 @@ import {
 import { AccountService } from '../services/accountService'
 import { BalanceService } from '../services/balanceService'
 import { getWalletStore } from '../store/walletStore'
-import { getWorkletStore } from '../store/workletStore'
 import { resolveWalletId } from '../utils/storeHelpers'
 import { convertBalanceToString } from '../utils/balanceUtils'
 import {
@@ -173,18 +172,6 @@ async function fetchBalance(
   const assetId = asset.getId()
   const network = asset.getNetwork()
 
-  const workletStore = getWorkletStore()
-  if (!workletStore.getState().isInitialized) {
-    return {
-      success: false,
-      network,
-      accountIndex,
-      assetId,
-      balance: null,
-      error: 'Wallet not initialized',
-    }
-  }
-
   try {
     let balanceResult: string
 
@@ -293,7 +280,6 @@ export function useBalance(
     error: addressError,
   } = useAddressLoader({ network, accountIndex })
 
-  const isWdkInitialized = getWorkletStore()((state) => state.isInitialized)
   const activeWalletId = getWalletStore()((state) => state.activeWalletId)
 
   let initialBalance: string | null = null
@@ -320,7 +306,6 @@ export function useBalance(
     queryFn: () => fetchBalance(accountIndex, asset),
     enabled: isQueryEnabled(
       options?.enabled,
-      isWdkInitialized,
       !!activeWalletId && !!address,
     ),
     refetchInterval: options?.refetchInterval,
@@ -391,7 +376,6 @@ export function useBalancesForWallet(
     enabled: options?.enabled,
   });
 
-  const isWdkInitialized = getWorkletStore()((state) => state.isInitialized);
   const walletId = getWalletStore()((state) => state.activeWalletId);
 
   const initialData: BalanceFetchResult[] | undefined = (() => {
@@ -422,7 +406,6 @@ export function useBalancesForWallet(
     queryFn: () => fetchBalancesForAssets(accountIndex, assetConfigs),
     enabled: isQueryEnabled(
       options?.enabled,
-      isWdkInitialized,
       !!walletId && !areAddressesLoading && assetConfigs.length > 0,
     ),
     refetchInterval: options?.refetchInterval,
