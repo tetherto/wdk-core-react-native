@@ -150,3 +150,107 @@ function MySparkComponent() {
   // ...
 }
 ```
+
+---
+
+## 4. Working with the Asynchronous Lifecycle
+
+The library is fundamentally asynchronous. A wallet must be unlocked before you can get a balance or send a transaction. The library is designed to make this easy by providing several safe patterns for handling this asynchronous nature. You should rarely need to check `if (status === 'READY')` yourself.
+
+### Pattern 1: The Reactive `useEffect` Pattern
+
+This is the most robust pattern for triggering logic that should run **immediately after** a major lifecycle event, like a wallet unlock or restore.
+
+**When to use it:** When you need to chain an action that depends on the result of another action (e.g., "after the wallet is restored, fetch the user's addresses").
+
+**How it works:** An event handler *triggers* an action (like `unlock`), and a `useEffect` hook *reacts* to the resulting `status` change.
+
+**Example:**
+
+```javascript
+import { useWalletManager, useAddresses } from '@tetherto/wdk-react-native-core';
+
+// ... inside a component
+const { unlock, status } = useWalletManager();
+const { loadAddresses } = useAddresses();
+const [isUnlockPending, setIsUnlockPending] = useState(false);
+
+// Step 1: The handler just triggers the action.
+const handleUnlock = async () => {
+  setIsUnlockPending(true);
+  try {
+    await unlock(myWalletId);
+  } catch (e) {
+    setIsUnlockPending(false); // Let the effect handle success
+  }
+};
+
+// Step 2: The effect reacts to the 'READY' status.
+useEffect(() => {
+  if (status === 'READY' && isUnlockPending) {
+    const fetchInitialData = async () => {
+      // ✅ CORRECT: The system is now guaranteed to be ready.
+      const addresses = await loadAddresses([0]);
+      console.log("Addresses are ready:", addresses);
+      setIsUnlockPending(false); // Action is complete
+    };
+    fetchInitialData();
+  }
+}, [status, isUnlockPending, loadAddresses]);
+```
+
+### Pattern 2: The Imperative `await` Pattern
+
+Many action-oriented hooks like `useAccount` have a built-in "gate." You can call them at any time, and they will internally wait for the library to be ready before executing.
+
+**When to use it:** When you're triggering a single action from a user event, like clicking a "Send" button. This is the simplest pattern.
+
+**How it works:** The hook function (e.g., `send` or `getBalance`) has an `await requireInitialized()` at the very beginning, which pauses the function until the wallet is unlocked.
+
+**Example:**
+
+```javascript
+import { useAccount } from '@tetherto/wdk-react-native-core';
+
+// ... inside a component
+const { send } = useAccount({ accountIndex: 0, network: 'ethereum' });
+
+const handleSend = async () => {
+  try {
+    // ✅ CORRECT: You can await the function directly.
+    // If the wallet is locked, this line will pause until it's unlocked.
+    // If it's already unlocked, it proceeds immediately.
+    const result = await send({ to: '0x...', amount: '1000', asset: ethAsset });
+    console.log('Transaction sent!', result.hash);
+  } catch (e) {
+    console.error('Send failed', e);
+  }
+};
+```
+
+### Pattern 3: The Declarative Query Pattern
+
+For fetching data that should be cached, like balances, the library uses TanStack Query. These hooks are declarative and automatically handle waiting.
+
+**When to use it:** Whenever you are fetching chain data that can become stale, such as balances (`useBalance`).
+
+**How it works:** The `useQuery` inside the hook has an `enabled` property that is tied to the library's status. The query will be dormant and will not run until its conditions (e.g., `!!activeWalletId && !!address`) are met.
+
+**Example:**
+
+```javascript
+import { useBalance } from '@tetherto/wdk-react-native-core';
+
+// ... inside a component
+const { data, isLoading, error } = useBalance(0, usdtAsset);
+
+// ✅ CORRECT: This hook handles everything automatically.
+// It will be in an `isLoading` state until the wallet is unlocked,
+// the address is loaded, and the balance is fetched.
+// You don't need to write any explicit waiting logic.
+
+if (isLoading) {
+  return <Spinner />;
+}
+// ... render balance
+```

@@ -4,7 +4,6 @@ import { getWalletStore } from '../store/walletStore'
 import { AddressService } from '../services/addressService'
 import { AddressInfo, AddressInfoResult } from '../types'
 
-
 export interface UseAddressesReturn {
   /** All loaded addresses for the active wallet. */
   data: AddressInfo[] | undefined
