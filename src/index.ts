@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /**
- * @tetherto/wdk-react-native-core
+ * @tetherto/wdk-core-react-native
  *
  * Core functionality for React Native wallets
  * Provides wallet management, balance fetching, and worklet operations

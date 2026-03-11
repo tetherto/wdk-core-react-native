@@ -1,5 +1,5 @@
 {
-  "name": "@tetherto/wdk-react-native-core",
+  "name": "@tetherto/wdk-core-react-native",
   "version": "1.0.0-beta.3",
   "description": "Core functionality for React Native wallets - wallet management, balance fetching, and worklet operations",
   "type": "module",
@@ -22,12 +22,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/wdk-react-native-core.git"
+    "url": "git+https://github.com/tetherto/wdk-core-react-native.git"
   },
   "bugs": {
-    "url": "https://github.com/tetherto/wdk-react-native-core/issues"
+    "url": "https://github.com/tetherto/wdk-core-react-native/issues"
   },
-  "homepage": "https://github.com/tetherto/wdk-react-native-core#readme",
+  "homepage": "https://github.com/tetherto/wdk-core-react-native#readme",
   "scripts": {
     "build": "tsc",
     "build:strict": "tsc",

@@ -21,7 +21,7 @@
  *
  * @example
  * ```tsx
- * import { useWdkApp } from '@tetherto/wdk-react-native-core'
+ * import { useWdkApp } from '@tetherto/wdk-core-react-native'
  * 
  * function App() {
  *   const { state, retry } = useWdkApp()

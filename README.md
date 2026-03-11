@@ -1,4 +1,4 @@
-# @tetherto/wdk-react-native-core
+# @tetherto/wdk-core-react-native
 
 Core functionality for React Native wallets, providing wallet management, balance fetching, and more.
 
@@ -30,7 +30,7 @@ This library uses a unique **worklet bundle** to run intensive cryptographic ope
 
 ### 1. Install the Core Library
 ```bash
-npm install @tetherto/wdk-react-native-core
+npm install @tetherto/wdk-core-react-native
 ```
 
 ### 2. Install the Worklet Bundler
@@ -107,7 +107,7 @@ The library's functionality is exposed through a set of React hooks. They are de
 *   **Standard Use Case:** Displaying a loading screen while the WDK initializes.
 *   **Snippet:**
     ```typescript
-    import { useWdkApp } from '@tetherto/wdk-react-native-core';
+    import { useWdkApp } from '@tetherto/wdk-core-react-native';
 
     const { isReady, error } = useWdkApp();
     if (!isReady) {
@@ -120,7 +120,7 @@ The library's functionality is exposed through a set of React hooks. They are de
 *   **Standard Use Case:** Checking if a wallet exists on startup, creating or loading a wallet.
 *   **Snippet:**
     ```typescript
-    import { useWdkApp, useWalletManager } from '@tetherto/wdk-react-native-core';
+    import { useWdkApp, useWalletManager } from '@tetherto/wdk-core-react-native';
 
     const { isReady } = useWdkApp();
     const { createWallet, loadWallet } = useWalletManager();
@@ -140,7 +140,7 @@ The library's functionality is exposed through a set of React hooks. They are de
 *   **Standard Use Case:** Loading the addresses for the active wallet to display them.
 *   **Snippet:**
     ```typescript
-    import { useAddresses } from '@tetherto/wdk-react-native-core';
+    import { useAddresses } from '@tetherto/wdk-core-react-native';
 
     const { addresses, loadAddresses } = useAddresses();
 
@@ -157,7 +157,7 @@ The library's functionality is exposed through a set of React hooks. They are de
 *   **Standard Use Case:** Getting the `account` object to call `signMessage` when a user clicks a button.
 *   **Snippet:**
     ```typescript
-    import { useAccount } from '@tetherto/wdk-react-native-core';
+    import { useAccount } from '@tetherto/wdk-core-react-native';
 
     const { account } = useAccount({ network: 'ethereum', accountIndex: 0 });
 
@@ -172,7 +172,7 @@ The library's functionality is exposed through a set of React hooks. They are de
 *   **Standard Use Case:** Getting the balance for a native asset (like ETH). You must define your assets first.
 *   **Snippet:**
     ```typescript
-    import { useBalance } from '@tetherto/wdk-react-native-core';
+    import { useBalance } from '@tetherto/wdk-core-react-native';
     
     // Assume 'ethAsset' is an asset object you've defined elsewhere
     const { data } = useBalance({ 
