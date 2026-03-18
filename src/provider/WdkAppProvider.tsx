@@ -810,6 +810,10 @@ export function WdkAppProvider<
       )
     ) {
       log('[WdkAppProvider] Wallet ready', { activeWalletId })
+      // Clear any stale error from previous failed attempts
+      if (authErrorRef.current) {
+        authErrorRef.current = null
+      }
       walletStore.setState((prev) =>
         updateWalletLoadingState(prev, {
           type: 'ready',
@@ -834,12 +838,14 @@ export function WdkAppProvider<
       })
       const error = new Error(walletManagerError!)
 
-      // Check if this is an authentication error (biometric failure)
+      // Check if this is a terminal error that should prevent auto-retry
       const errorMessage = walletManagerError?.toLowerCase() || ''
       const isAuthError =
         errorMessage.includes('authentication') ||
         errorMessage.includes('biometric') ||
-        errorMessage.includes('user cancel')
+        errorMessage.includes('user cancel') ||
+        errorMessage.includes('wallet_encryption_key') ||
+        errorMessage.includes('failed to decrypt')
 
       if (isAuthError && !authErrorRef.current) {
         log(
