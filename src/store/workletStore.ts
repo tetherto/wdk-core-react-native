@@ -154,7 +154,7 @@ export function createWorkletStore(): WorkletStoreInstance {
       () => ({
         ...initialState,
       }),
-      { name: 'WorkletStore' },
+      { name: 'WorkletStore', enabled: __DEV__ },
     ),
   )
 
