@@ -91,7 +91,7 @@ export class WalletSwitchingService {
         }
 
         // Ensure worklet is started (WdkAppProvider must be mounted)
-        WorkletLifecycleService.ensureWorkletStarted()
+        await WorkletLifecycleService.ensureWorkletStarted()
 
         // Note: We don't clear previous wallet's credentials cache when switching
         // The LRU eviction policy in workletStore will handle cache management
