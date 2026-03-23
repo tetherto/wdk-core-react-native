@@ -30,7 +30,7 @@ import { log, logWarn } from '../utils/logger'
 import type { WdkConfigs, BundleConfig } from '../types'
 import type { WorkletState } from '../store/workletStore'
 import HRPC from '@tetherto/pear-wrk-wdk/hrpc'
-import { createResolvablePromise } from 'src/utils/promise'
+import { createResolvablePromise } from '../utils/promise'
 
 /**
  * Extended HRPC type that may have a cleanup method
