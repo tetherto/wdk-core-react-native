@@ -139,11 +139,9 @@ export class WalletSetupService {
     encryptedSeed: string,
     encryptedEntropy?: string
   ): Promise<void> {
+    await WorkletLifecycleService.ensureWorkletStarted()
+
     const store = getWorkletStore()
-
-    // Ensure worklet is started (WdkAppProvider must be mounted)
-    WorkletLifecycleService.ensureWorkletStarted()
-
     const wasInitialized = store.getState().isInitialized
     const previousEncryptionKey = store.getState().encryptionKey
     const previousEncryptedSeed = store.getState().encryptedSeed
@@ -202,6 +200,8 @@ export class WalletSetupService {
     encryptionKey: string
     encryptedSeed: string
   }> {
+    await WorkletLifecycleService.ensureWorkletStarted()
+
     const secureStorage = this.getSecureStorage()
     const workletStore = getWorkletStore()
     const requireBiometrics = workletStore.getState().requireBiometrics ?? true
@@ -212,9 +212,6 @@ export class WalletSetupService {
         throw new Error('Biometric authentication required to create wallet')
       }
     }
-
-    // Ensure worklet is started (WdkAppProvider must be mounted)
-    WorkletLifecycleService.ensureWorkletStarted()
 
     // Generate entropy and encrypt
     const result = await WorkletLifecycleService.generateEntropyAndEncrypt(DEFAULT_MNEMONIC_WORD_COUNT)
@@ -243,6 +240,8 @@ export class WalletSetupService {
         await secureStorage.deleteWallet(walletId)
       } catch (cleanupError) {
         logError('Failed to cleanup partial wallet creation:', cleanupError)
+      } finally {
+        WorkletLifecycleService.reset()
       }
       throw error
     }
@@ -323,6 +322,8 @@ export class WalletSetupService {
     encryptedSeed: string
     encryptedEntropy: string
   }> {
+    await WorkletLifecycleService.ensureWorkletStarted()
+
     const secureStorage = this.getSecureStorage()
     const requireBiometrics = getWorkletStore().getState().requireBiometrics ?? true
 
@@ -332,8 +333,6 @@ export class WalletSetupService {
         throw new Error('Biometric authentication required to import wallet')
       }
     }
-
-    WorkletLifecycleService.ensureWorkletStarted()
 
     const result = await WorkletLifecycleService.getSeedAndEntropyFromMnemonic(mnemonic)
 
@@ -389,8 +388,7 @@ export class WalletSetupService {
     encryptionKey: string
     encryptedSeed: string
   }): Promise<void> {
-    // Ensure worklet is started (WdkAppProvider must be mounted)
-    WorkletLifecycleService.ensureWorkletStarted()
+    await WorkletLifecycleService.ensureWorkletStarted()
 
     await WorkletLifecycleService.initializeWDK(credentials)
   }

@@ -30,6 +30,7 @@ import { log, logWarn } from '../utils/logger'
 import type { WdkConfigs, BundleConfig } from '../types'
 import type { WorkletState } from '../store/workletStore'
 import HRPC from '@tetherto/pear-wrk-wdk/hrpc'
+import { createResolvablePromise } from 'src/utils/promise'
 
 /**
  * Extended HRPC type that may have a cleanup method
@@ -535,6 +536,8 @@ export class WorkletLifecycleService {
       isInitialized: false,
       wdkInitResult: null,
     })
+
+    workletStore.setState({ isWorkletInitializedPromise: createResolvablePromise<boolean>() })
 
     // Clear addresses from wallet store
     walletStore.setState({
