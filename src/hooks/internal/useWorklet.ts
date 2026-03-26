@@ -52,8 +52,6 @@ export interface UseWorkletResult {
   worklet: Worklet | null
   workletStartResult: WorkletStartResponse | null
   wdkInitResult: { status?: string | null } | null
-  encryptedSeed: string | null
-  encryptionKey: string | null
   networkConfigs: WdkConfigs | null
   // Actions
   initializeWDK: (options: { encryptionKey: string; encryptedSeed: string }) => Promise<void>
@@ -91,8 +89,6 @@ export function useWorklet(): UseWorkletResult {
     worklet: state.worklet,
     workletStartResult: state.workletStartResult,
     wdkInitResult: state.wdkInitResult,
-    encryptedSeed: state.encryptedSeed,
-    encryptionKey: state.encryptionKey,
     networkConfigs: state.wdkConfigs,
   }))
   const workletState = store(selector)
@@ -106,8 +102,6 @@ export function useWorklet(): UseWorkletResult {
     worklet: workletState.worklet,
     workletStartResult: workletState.workletStartResult,
     wdkInitResult: workletState.wdkInitResult,
-    encryptedSeed: workletState.encryptedSeed,
-    encryptionKey: workletState.encryptionKey,
     networkConfigs: workletState.networkConfigs,
     initializeWDK: WorkletLifecycleService.initializeWDK,
     generateEntropyAndEncrypt: WorkletLifecycleService.generateEntropyAndEncrypt,

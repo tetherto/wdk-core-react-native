@@ -79,8 +79,6 @@ describe('WalletSetupService', () => {
     if (typeof (mockSecureStorage as any)._clearStorage === 'function') {
       (mockSecureStorage as any)._clearStorage()
     }
-    // Clear credentials cache between tests
-    WalletSetupService.clearCredentialsCache()
     // Reset worklet store mock - default state
     const mockStore = getWorkletStore() as any
     if (mockStore) {
@@ -176,8 +174,6 @@ describe('WalletSetupService', () => {
     })
 
     it('should throw error if encryption key not found', async () => {
-      // Ensure cache is clear and storage is empty
-      WalletSetupService.clearCredentialsCache()
       await mockSecureStorage.clearAll()
       
       await expect(
@@ -186,8 +182,6 @@ describe('WalletSetupService', () => {
     })
 
     it('should throw error if encrypted seed not found', async () => {
-      // Ensure cache is clear
-      WalletSetupService.clearCredentialsCache()
       await mockSecureStorage.setEncryptionKey('test-key', undefined)
       // Don't set seed
 
@@ -292,9 +286,6 @@ describe('WalletSetupService', () => {
         isInitialized: false,
       }))
 
-      // Ensure cache is clear
-      WalletSetupService.clearCredentialsCache()
-      
       // Setup: create a wallet first
       await mockSecureStorage.setEncryptionKey('test-key', undefined)
       await mockSecureStorage.setEncryptedSeed('test-seed', undefined)
@@ -333,9 +324,6 @@ describe('WalletSetupService', () => {
         isWorkletStarted: true,
         isInitialized: false,
       }))
-
-      // Ensure cache is clear
-      WalletSetupService.clearCredentialsCache()
       
       const identifier = 'user@example.com'
       await mockSecureStorage.setEncryptionKey('test-key', identifier)
