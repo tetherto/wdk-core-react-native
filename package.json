@@ -54,7 +54,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
-    "@tetherto/pear-wrk-wdk": "1.0.0-beta.6",
+    "@tetherto/pear-wrk-wdk": "github:nampc1/pear-wrk-wdk-fork#d3e8f4daa58c170b3964a379f1483dd7f353ade3",
     "@tetherto/wdk-react-native-secure-storage": "1.0.0-beta.2",
     "expo-crypto": "^15.0.8",
     "immer": "^11.1.3",
