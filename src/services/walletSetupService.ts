@@ -14,9 +14,6 @@
 
 import type { SecureStorage } from '@tetherto/wdk-react-native-secure-storage'
 
-import { 
-  getWorkletStore
-} from '../store/workletStore'
 import { WorkletLifecycleService } from './workletLifecycleService'
 import { DEFAULT_MNEMONIC_WORD_COUNT } from '../utils/constants'
 import { log, logError } from '../utils/logger'
@@ -62,11 +59,6 @@ export class WalletSetupService {
     return this.secureStorageInstance !== null
   }
 
-  static setRequireBiometrics(requireBiometrics: boolean) {
-    const store = getWorkletStore()
-    store.setState({ requireBiometrics })
-  }
-
   static async createNewWallet(
     walletId?: string
   ): Promise<{
@@ -76,15 +68,6 @@ export class WalletSetupService {
     await WorkletLifecycleService.ensureWorkletStarted()
 
     const secureStorage = this.getSecureStorage()
-    const workletStore = getWorkletStore()
-    const requireBiometrics = workletStore.getState().requireBiometrics ?? true
-
-    if (requireBiometrics) {
-      const authenticated = await secureStorage.authenticate()
-      if (!authenticated) {
-        throw new Error('Biometric authentication required to create wallet')
-      }
-    }
 
     const result = await WorkletLifecycleService.generateEntropyAndEncrypt(DEFAULT_MNEMONIC_WORD_COUNT)
 
@@ -110,7 +93,7 @@ export class WalletSetupService {
     }
 
     try {
-      await secureStorage.setEncryptionKey(result.encryptionKey, walletId, { requireBiometrics })
+      await secureStorage.setEncryptionKey(result.encryptionKey, walletId, { requireBiometrics: false })
       await secureStorage.setEncryptedSeed(result.encryptedSeedBuffer, walletId)
       await secureStorage.setEncryptedEntropy(result.encryptedEntropyBuffer, walletId)
     } catch (error) {
@@ -137,10 +120,9 @@ export class WalletSetupService {
     encryptedSeed: string
   }> {
     const secureStorage = this.getSecureStorage()
-    const requireBiometrics = getWorkletStore().getState().requireBiometrics ?? true
 
     const encryptedSeed = await secureStorage.getEncryptedSeed(walletId)
-    const encryptionKey = await secureStorage.getEncryptionKey(walletId, { requireBiometrics })
+    const encryptionKey = await secureStorage.getEncryptionKey(walletId, { requireBiometrics: false })
 
     if (!encryptionKey) {
       throw new Error('Encryption key not found. Authentication may have failed or wallet does not exist.')
@@ -175,14 +157,6 @@ export class WalletSetupService {
     await WorkletLifecycleService.ensureWorkletStarted()
 
     const secureStorage = this.getSecureStorage()
-    const requireBiometrics = getWorkletStore().getState().requireBiometrics ?? true
-
-    if (requireBiometrics) {
-      const authenticated = await secureStorage.authenticate()
-      if (!authenticated) {
-        throw new Error('Biometric authentication required to import wallet')
-      }
-    }
 
     const result = await WorkletLifecycleService.getSeedAndEntropyFromMnemonic(mnemonic)
 
@@ -208,7 +182,7 @@ export class WalletSetupService {
     }
 
     try {
-      await secureStorage.setEncryptionKey(result.encryptionKey, walletId, { requireBiometrics })
+      await secureStorage.setEncryptionKey(result.encryptionKey, walletId, { requireBiometrics: false })
       await secureStorage.setEncryptedSeed(result.encryptedSeedBuffer, walletId)
       await secureStorage.setEncryptedEntropy(result.encryptedEntropyBuffer, walletId)
     } catch (error) {
@@ -281,9 +255,8 @@ export class WalletSetupService {
    */
   static async getEncryptionKey(walletId?: string): Promise<string | null> {
     const secureStorage = this.getSecureStorage()
-    const requireBiometrics = getWorkletStore().getState().requireBiometrics ?? true
 
-    return secureStorage.getEncryptionKey(walletId, { requireBiometrics })  }
+    return secureStorage.getEncryptionKey(walletId, { requireBiometrics: false })  }
 
   /**
    * Get encrypted seed (checks cache first, then secureStorage)

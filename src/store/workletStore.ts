@@ -70,7 +70,6 @@ export interface WorkletState {
   isInitialized: boolean
   isLoading: boolean
   error: string | null
-  requireBiometrics?: boolean
   wdkConfigs: WdkConfigs | null
   workletStartResult: WorkletStartResponse | null
   wdkInitResult: { status?: string | null } | null
