@@ -61,6 +61,7 @@ export function useAppLifecycle({
         ) {
           return
         }
+        log('[useAppLifecycle] Foreground WDK reinit (initializeWDK)')
         void WorkletLifecycleService.initializeWDK({
           encryptionKey: ws.encryptionKey,
           encryptedSeed: ws.encryptedSeed,
