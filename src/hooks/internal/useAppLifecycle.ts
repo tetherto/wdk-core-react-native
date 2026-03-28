@@ -15,10 +15,14 @@
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 
+import { WorkletLifecycleService } from '../../services/workletLifecycleService'
 import { getWalletStore } from '../../store/walletStore'
 import { updateWalletLoadingState } from '../../store/walletStore'
-import { clearAllSensitiveData } from '../../store/workletStore'
-import { log } from '../../utils/logger'
+import { clearAllSensitiveData, getWorkletStore } from '../../store/workletStore'
+import { log, logError } from '../../utils/logger'
+
+/** Debounce foreground transitions (e.g. Android inactive flakiness). */
+const FOREGROUND_WDK_REINIT_DEBOUNCE_MS = 200
 
 export interface UseAppLifecycleProps {
   clearSensitiveDataOnBackground: boolean
@@ -28,7 +32,6 @@ export function useAppLifecycle({
   clearSensitiveDataOnBackground,
 }: UseAppLifecycleProps): void {
   useEffect(() => {
-    // Skip if not explicitly enabled
     if (!clearSensitiveDataOnBackground) {
       return
     }
@@ -36,8 +39,36 @@ export function useAppLifecycle({
     // CRITICAL: Clear cache on mount to handle true app restarts (not hot reloads)
     log('[useAppLifecycle] Clearing credentials cache on mount (app restart)')
     clearAllSensitiveData()
+  }, [clearSensitiveDataOnBackground])
 
+  useEffect(() => {
     const appStateRef = { current: AppState.currentState }
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleForegroundWdkReinit = () => {
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer)
+      }
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null
+        const ws = getWorkletStore().getState()
+        if (
+          !ws.isWorkletStarted ||
+          !ws.isInitialized ||
+          ws.isLoading ||
+          !ws.encryptionKey ||
+          !ws.encryptedSeed
+        ) {
+          return
+        }
+        void WorkletLifecycleService.initializeWDK({
+          encryptionKey: ws.encryptionKey,
+          encryptedSeed: ws.encryptedSeed,
+        }).catch((err) => {
+          logError('[useAppLifecycle] Foreground WDK reinit failed', err)
+        })
+      }, FOREGROUND_WDK_REINIT_DEBOUNCE_MS)
+    }
 
     const subscription = AppState.addEventListener(
       'change',
@@ -45,56 +76,62 @@ export function useAppLifecycle({
         const previousState = appStateRef.current
         appStateRef.current = nextAppState
 
-        // When going to background: clear cache and mark wallet for re-authentication
-        if (
-          (nextAppState === 'background' || nextAppState === 'inactive') &&
-          previousState === 'active'
-        ) {
-          log(
-            '[useAppLifecycle] App going to background - clearing sensitive data and marking for re-auth',
-          )
-          clearAllSensitiveData()
-
-          // Reset wallet state to trigger re-authentication on foreground
-          const walletStore = getWalletStore()
-          const currentState = walletStore.getState()
-          const currentStateType = currentState.walletLoadingState.type
-
-          if (currentStateType === 'ready' && currentState.activeWalletId) {
-            log(
-              '[useAppLifecycle] Resetting wallet state to trigger biometrics on foreground',
-            )
-            walletStore.setState((prev) =>
-              updateWalletLoadingState(prev, {
-                type: 'not_loaded',
-              }),
-            )
-          } else if (
-            currentStateType === 'loading' ||
-            currentStateType === 'checking'
+        if (clearSensitiveDataOnBackground) {
+          if (
+            (nextAppState === 'background' || nextAppState === 'inactive') &&
+            previousState === 'active'
           ) {
             log(
-              '[useAppLifecycle] Preserving wallet loading state during background transition',
-              {
-                currentState: currentStateType,
-              },
+              '[useAppLifecycle] App going to background - clearing sensitive data and marking for re-auth',
             )
-            // Do not reset - allow biometric authentication to complete
+            clearAllSensitiveData()
+
+            const walletStore = getWalletStore()
+            const currentState = walletStore.getState()
+            const currentStateType = currentState.walletLoadingState.type
+
+            if (currentStateType === 'ready' && currentState.activeWalletId) {
+              log(
+                '[useAppLifecycle] Resetting wallet state to trigger biometrics on foreground',
+              )
+              walletStore.setState((prev) =>
+                updateWalletLoadingState(prev, {
+                  type: 'not_loaded',
+                }),
+              )
+            } else if (
+              currentStateType === 'loading' ||
+              currentStateType === 'checking'
+            ) {
+              log(
+                '[useAppLifecycle] Preserving wallet loading state during background transition',
+                {
+                  currentState: currentStateType,
+                },
+              )
+            }
           }
         }
 
-        // When coming to foreground: wallet will auto-initialize with biometrics
         if (
           nextAppState === 'active' &&
           (previousState === 'background' || previousState === 'inactive')
         ) {
-          log(
-            '[useAppLifecycle] App coming to foreground - auto-initialization will trigger biometrics',
-          )
+          if (clearSensitiveDataOnBackground) {
+            log(
+              '[useAppLifecycle] App coming to foreground - auto-initialization will trigger biometrics',
+            )
+          }
+          scheduleForegroundWdkReinit()
         }
       },
     )
 
-    return () => subscription.remove()
+    return () => {
+      subscription.remove()
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer)
+      }
+    }
   }, [clearSensitiveDataOnBackground])
 }

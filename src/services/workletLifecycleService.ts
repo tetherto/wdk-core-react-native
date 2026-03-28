@@ -224,15 +224,6 @@ export class WorkletLifecycleService {
       throw new Error('Worklet must be started before initializing WDK')
     }
 
-    if (
-      state.isInitialized &&
-      state.encryptionKey === options.encryptionKey &&
-      state.encryptedSeed === options.encryptedSeed
-    ) {
-      log('WDK already initialized with the same encrypted seed')
-      return
-    }
-
     try {
       store.setState({ error: null, isLoading: true })
 

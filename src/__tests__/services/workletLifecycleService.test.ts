@@ -21,6 +21,7 @@
 import { WorkletLifecycleService } from '../../services/workletLifecycleService'
 import { getWorkletStore } from '../../store/workletStore'
 import type { WdkConfigs, BundleConfig } from '../../types'
+import { createResolvablePromise } from '../../utils/promise'
 import HRPC from '@tetherto/pear-wrk-wdk/hrpc'
 
 // Mock dependencies
@@ -39,9 +40,12 @@ jest.mock('react-native-bare-kit', () => ({
 // Shared mock workletStart function to track calls across all HRPC instances
 const mockWorkletStart = jest.fn(() => Promise.resolve({ status: 'success' }))
 
+const mockInitializeWDK = jest.fn(() => Promise.resolve({ status: 'success' }))
+
 const mockHRPCInstance = {
   workletStart: mockWorkletStart,
   ipc: mockWorkletInstance.IPC,
+  initializeWDK: mockInitializeWDK,
 }
 
 jest.mock('@tetherto/pear-wrk-wdk/hrpc', () => {
@@ -204,8 +208,11 @@ describe('WorkletLifecycleService', () => {
       encryptedSeed: null,
       encryptionKey: null,
       networkConfigs: null,
+      wdkConfigs: null,
       workletStartResult: null,
       wdkInitResult: null,
+      isWorkletStartedPromise: createResolvablePromise<boolean>(),
+      isWorkletInitializedPromise: createResolvablePromise<boolean>(),
     }
     // Update the shared mock store
     sharedMockStore.getState = jest.fn(() => defaultState)
@@ -410,8 +417,14 @@ describe('WorkletLifecycleService', () => {
       // Make workletStart fail to simulate an error
       mockHRPCInstance.workletStart.mockRejectedValueOnce(new Error('Failed to start worklet'))
 
+      void mockStore
+        .getState()
+        .isWorkletStartedPromise.promise.catch(() => {
+          /* startWorklet rejects this promise before rethrowing via handleErrorWithStateUpdate */
+        })
+
       await expect(
-        WorkletLifecycleService.startWorklet(defaultNetworkConfigs, mockBundleConfig)
+        WorkletLifecycleService.startWorklet(defaultNetworkConfigs, mockBundleConfig),
       ).rejects.toThrow()
 
       // Verify setState was called (at least for loading state and error state)
@@ -464,8 +477,11 @@ describe('WorkletLifecycleService', () => {
         encryptedSeed: null,
         encryptionKey: null,
         networkConfigs: null,
+        wdkConfigs: null,
         workletStartResult: null,
         wdkInitResult: null,
+        isWorkletStartedPromise: createResolvablePromise<boolean>(),
+        isWorkletInitializedPromise: createResolvablePromise<boolean>(),
       })
 
       await WorkletLifecycleService.startWorklet(defaultNetworkConfigs, mockBundleConfig)
@@ -540,6 +556,48 @@ describe('WorkletLifecycleService', () => {
         paymasterAddress: '0x1234567890123456789012345678901234567890',
         entryPointAddress: '0x0987654321098765432109876543210987654321',
         transferMaxFee: 50000,
+      })
+    })
+  })
+
+  describe('initializeWDK', () => {
+    it('calls hrpc.initializeWDK again when invoked twice with the same credentials', async () => {
+      mockInitializeWDK.mockClear()
+      mockInitializeWDK.mockResolvedValue({ status: 'success' })
+
+      const initPromise = createResolvablePromise<boolean>()
+      initPromise.resolve(true)
+
+      const wdkReadyState = {
+        isWorkletStarted: true,
+        isInitialized: true,
+        isLoading: false,
+        worklet: mockWorkletInstance,
+        hrpc: mockHRPCInstance,
+        ipc: mockWorkletInstance.IPC,
+        error: null,
+        encryptedSeed: 'same-seed',
+        encryptionKey: 'same-key',
+        wdkConfigs: defaultNetworkConfigs,
+        workletStartResult: null,
+        wdkInitResult: { status: 'success' },
+        isWorkletInitializedPromise: initPromise,
+      }
+      ;(mockStore as any).getState = jest.fn(() => wdkReadyState)
+
+      const opts = {
+        encryptionKey: 'same-key',
+        encryptedSeed: 'same-seed',
+      }
+
+      await WorkletLifecycleService.initializeWDK(opts)
+      await WorkletLifecycleService.initializeWDK(opts)
+
+      expect(mockInitializeWDK).toHaveBeenCalledTimes(2)
+      expect(mockInitializeWDK).toHaveBeenCalledWith({
+        encryptionKey: opts.encryptionKey,
+        encryptedSeed: opts.encryptedSeed,
+        config: JSON.stringify(defaultNetworkConfigs),
       })
     })
   })
