@@ -39,6 +39,8 @@ export type { UseAddressesReturn } from './hooks/useAddresses'
 export { useAccount } from './hooks/useAccount'
 export type { UseAccountParams, UseAccountReturn } from './hooks/useAccount'
 
+export type { UseWdkAppResult } from './hooks/useWdkApp'
+
 export { useWalletManager } from './hooks/useWalletManager'
 export type { UseWalletManagerResult, WalletInfo } from './hooks/useWalletManager'
 export {

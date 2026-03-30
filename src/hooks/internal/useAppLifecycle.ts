@@ -53,7 +53,7 @@ export function useAppLifecycle({
         log('[useAppLifecycle] Foreground WDK reinit (initializeWDK)')
         void WorkletLifecycleService.initializeWDK().catch((err) => {
           logError('[useAppLifecycle] Foreground WDK reinit failed', err)
-        }).finally(() => log('[useAppLifecycle] WDK reinit done'))
+        })
       }, FOREGROUND_WDK_REINIT_DEBOUNCE_MS)
     }
 
@@ -103,11 +103,9 @@ export function useAppLifecycle({
           nextAppState === 'active' &&
           (previousState === 'background' || previousState === 'inactive')
         ) {
-          if (clearSensitiveDataOnBackground) {
-            log(
-              '[useAppLifecycle] App coming to foreground - auto-initialization will trigger biometrics',
-            )
-          }
+          log(
+            '[useAppLifecycle] App coming to foreground',
+          )
           scheduleForegroundWdkReinit()
         }
       },
