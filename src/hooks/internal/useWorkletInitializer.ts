@@ -15,7 +15,6 @@
 import { useEffect } from 'react'
 import type { WdkConfigs, BundleConfig } from '../../types'
 import { WorkletLifecycleService } from '../../services/workletLifecycleService'
-import { WalletSetupService } from '../../services/walletSetupService'
 import { normalizeError } from '../../utils/errorUtils'
 import { log, logError } from '../../utils/logger'
 import { useWorklet } from './useWorklet'
@@ -26,7 +25,6 @@ export interface UseWorkletInitializerProps<
 > {
   bundleConfig: BundleConfig
   wdkConfigs: WdkConfigs<TNetwork, TProtocol>
-  requireBiometrics: boolean
 }
 
 /**
@@ -39,7 +37,6 @@ export function useWorkletInitializer<
 >({
   bundleConfig,
   wdkConfigs,
-  requireBiometrics,
 }: UseWorkletInitializerProps<TNetwork, TProtocol>) {
   const workletHookState = useWorklet()
   const {
@@ -78,7 +75,7 @@ export function useWorkletInitializer<
       try {
         log('[useWorkletInitializer] Starting worklet initialization...')
         await WorkletLifecycleService.startWorklet(wdkConfigs, bundleConfig)
-        WalletSetupService.setRequireBiometrics(requireBiometrics)
+
         if (!cancelled) {
           log('[useWorkletInitializer] Worklet started successfully')
         }
@@ -105,7 +102,6 @@ export function useWorkletInitializer<
     isWorkletStarted,
     bundleConfig,
     wdkConfigs,
-    requireBiometrics,
   ])
 
   return workletHookState

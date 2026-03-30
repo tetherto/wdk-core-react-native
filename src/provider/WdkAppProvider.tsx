@@ -51,7 +51,6 @@ export interface WdkAppProviderProps<
   bundle: BundleConfig
   wdkConfigs: WdkConfigs<TNetwork, TProtocol>
   enableAutoInitialization?: boolean
-  requireBiometrics?: boolean
   currentUserId?: string | null
   clearSensitiveDataOnBackground?: boolean
   children: React.ReactNode
@@ -74,7 +73,6 @@ export function WdkAppProvider<
   bundle: bundleConfig,
   wdkConfigs,
   enableAutoInitialization = true,
-  requireBiometrics = true,
   currentUserId,
   clearSensitiveDataOnBackground = false,
   children,
@@ -108,7 +106,6 @@ export function WdkAppProvider<
   } = useWorkletInitializer({
     bundleConfig,
     wdkConfigs,
-    requireBiometrics,
   })
 
   useAppLifecycle({ clearSensitiveDataOnBackground })
