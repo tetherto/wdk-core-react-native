@@ -55,7 +55,7 @@ import type { WdkAppContextValue } from '../provider/WdkAppProvider'
 import { getWorkletStore } from '../store/workletStore'
 import { WorkletLifecycleService } from '../services/workletLifecycleService'
 import { log, logError } from '../utils/logger'
-import { withOperationMutex } from 'src/utils/operationMutex'
+import { withOperationMutex } from '../utils/operationMutex'
 
 export interface UseWdkAppResult extends WdkAppContextValue {
   reinitializeWdk: () => Promise<void>
