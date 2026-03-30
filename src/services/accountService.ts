@@ -45,7 +45,7 @@ export class AccountService {
     network: string,
     accountIndex: number,
     methodName: string,
-    ...args: any[]
+    ...args: unknown[]
   ): Promise<unknown> {
     if (typeof methodName !== 'string' || methodName.trim().length === 0) {
       throw new Error('methodName must be a non-empty string')

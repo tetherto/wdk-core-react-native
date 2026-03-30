@@ -22,8 +22,8 @@
  * Structure of a single method definition
  */
 export interface MethodDef {
-  params: any[]
-  result: any
+  params: unknown[]
+  result: unknown
 }
 
 /**

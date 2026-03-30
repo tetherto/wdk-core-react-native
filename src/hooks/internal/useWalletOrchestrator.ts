@@ -19,33 +19,40 @@ import {
   isWalletErrorState,
   isWalletLoadingState,
   updateWalletLoadingState,
-  type WalletStore,
+  WalletLoadingState,
+  type WalletStore
 } from '../../store/walletStore'
 import { WalletSetupService } from '../../services/walletSetupService'
 import { useWalletManager } from '../useWalletManager'
 import {
   getWalletSwitchDecision,
   shouldMarkWalletAsReady,
-  shouldResetToNotLoaded,
+  shouldResetToNotLoaded
 } from '../../utils/walletStateHelpers'
 import { log, logError } from '../../utils/logger'
 import type { WdkAppState } from '../../provider/WdkAppProvider'
 
-// Custom deep equality for walletLoadingState comparison
-const deepEqualityFn = (a: any, b: any) => {
+const deepEqualityFn = (a: WalletLoadingState, b: WalletLoadingState): boolean => {
   if (a === b) return true
-  if (!a || !b) return false
-  if (typeof a !== 'object' || typeof b !== 'object') return a === b
 
-  const keysA = Object.keys(a)
-  const keysB = Object.keys(b)
-  if (keysA.length !== keysB.length) return false
+  if (a.type !== b.type) return false
 
-  for (const key of keysA) {
-    if (!keysB.includes(key)) return false
-    if (a[key] !== b[key]) return false
+  switch (a.type) {
+    case 'not_loaded':
+      return true
+    case 'checking':
+      return a.identifier === (b as typeof a).identifier
+    case 'loading':
+      return a.identifier === (b as typeof a).identifier &&
+             a.walletExists === (b as typeof a).walletExists
+    case 'ready':
+      return a.identifier === (b as typeof a).identifier
+    case 'error':
+      return a.identifier === (b as typeof a).identifier &&
+             a.error?.message === (b as typeof a).error?.message
+    default:
+      return false
   }
-  return true
 }
 
 export interface UseWalletOrchestratorProps {
@@ -56,25 +63,28 @@ export interface UseWalletOrchestratorProps {
   workletError: string | null
 }
 
-export function useWalletOrchestrator({
+export function useWalletOrchestrator ({
   enableAutoInitialization,
   currentUserId,
   isWorkletStarted,
   isWorkletInitialized,
-  workletError,
-}: UseWalletOrchestratorProps) {
+  workletError
+}: UseWalletOrchestratorProps): {
+    state: WdkAppState
+    retry: () => void
+  } {
   const walletStore = getWalletStore()
 
   const activeWalletId = walletStore(
-    (state: WalletStore) => state.activeWalletId,
+    (state: WalletStore) => state.activeWalletId
   )
 
   // For walletLoadingState, use a ref to manually check equality and prevent unnecessary re-renders
   const walletLoadingStateRef = useRef(
-    walletStore.getState().walletLoadingState,
+    walletStore.getState().walletLoadingState
   )
   const [walletLoadingState, setWalletLoadingState] = useState(
-    walletStore.getState().walletLoadingState,
+    walletStore.getState().walletLoadingState
   )
 
   useEffect(() => {
@@ -90,7 +100,7 @@ export function useWalletOrchestrator({
   }, [walletStore])
 
   const walletAddresses = walletStore((state: WalletStore) =>
-    state.activeWalletId ? state.addresses[state.activeWalletId] : undefined,
+    state.activeWalletId !== null && state.activeWalletId !== '' ? state.addresses[state.activeWalletId] : undefined
   )
 
   const { createWallet, unlock } = useWalletManager()
@@ -109,9 +119,9 @@ export function useWalletOrchestrator({
     // EARLY EXIT: Skip automatic wallet initialization if disabled (e.g., when logged out)
     if (!enableAutoInitialization) {
       // Clear authentication error flag when auto-init is disabled (e.g., logout)
-      if (authErrorRef.current) {
+      if (authErrorRef.current !== null || authErrorRef.current !== '') {
         log(
-          '[useWalletOrchestrator] Clearing authentication error flag - auto-init disabled',
+          '[useWalletOrchestrator] Clearing authentication error flag - auto-init disabled'
         )
         authErrorRef.current = null
       }
@@ -122,8 +132,8 @@ export function useWalletOrchestrator({
       log(
         '[useWalletOrchestrator] Waiting for user identity confirmation before auto-init',
         {
-          hasActiveWalletId: !!activeWalletId,
-        },
+          hasActiveWalletId: activeWalletId !== null && activeWalletId !== ''
+        }
       )
       return
     }
@@ -131,51 +141,51 @@ export function useWalletOrchestrator({
     if (activeWalletId !== currentUserId) {
       log('[useWalletOrchestrator] Setting activeWalletId to current user', {
         activeWalletId,
-        currentUserId,
+        currentUserId
       })
 
       walletStore.setState({
-        activeWalletId: currentUserId,
+        activeWalletId: currentUserId
       })
 
-      if (authErrorRef.current) {
+      if (authErrorRef.current !== null || authErrorRef.current !== '') {
         authErrorRef.current = null
       }
 
       return
     }
 
-    // EARLY EXIT: Skip if we have an authentication error to prevent infinite retry loop
-    const loadingStateError =
-      walletLoadingState.type === 'error' && walletLoadingState.error?.message
-    if (loadingStateError && authErrorRef.current === loadingStateError) {
+    const currentErrorMsg: string | undefined =
+      walletLoadingState.type === 'error' ? walletLoadingState.error?.message : undefined;
+
+    if (currentErrorMsg !== undefined && authErrorRef.current === currentErrorMsg) {
       log(
         '[useWalletOrchestrator] Skipping auto-initialization due to persistent authentication error',
         {
-          error: authErrorRef.current,
-        },
+          error: authErrorRef.current
+        }
       )
       return
     }
 
     const currentWalletId = getWalletIdFromLoadingState(walletLoadingState)
     const hasAddresses = !!(
-      walletAddresses && Object.keys(walletAddresses).length > 0
+      (walletAddresses != null) && Object.keys(walletAddresses).length > 0
     )
 
     // Handle activeWalletId cleared
     if (shouldResetToNotLoaded(activeWalletId, walletLoadingState)) {
       log(
-        '[useWalletOrchestrator] Active wallet cleared, resetting wallet state',
+        '[useWalletOrchestrator] Active wallet cleared, resetting wallet state'
       )
       if (authErrorRef.current) {
         log(
-          '[useWalletOrchestrator] Clearing authentication error flag on wallet reset',
+          '[useWalletOrchestrator] Clearing authentication error flag on wallet reset'
         )
         authErrorRef.current = null
       }
       walletStore.setState((prev) =>
-        updateWalletLoadingState(prev, { type: 'not_loaded' }),
+        updateWalletLoadingState(prev, { type: 'not_loaded' })
       )
       return
     }
@@ -196,8 +206,8 @@ export function useWalletOrchestrator({
           {
             activeWalletId: walletId,
             walletExists,
-            shouldCreateNew,
-          },
+            shouldCreateNew
+          }
         )
 
         if (shouldCreateNew) {
@@ -207,7 +217,7 @@ export function useWalletOrchestrator({
         }
 
         log(
-          `[useWalletOrchestrator] Wallet initialization call completed for ${walletId}`,
+          `[useWalletOrchestrator] Wallet initialization call completed for ${walletId}`
         )
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -219,7 +229,7 @@ export function useWalletOrchestrator({
         if (isAuthError && authErrorRef.current !== errorMessage) {
           log(
             '[useWalletOrchestrator] Authentication error detected - preventing auto-retry',
-            { error: errorMessage },
+            { error: errorMessage }
           )
           authErrorRef.current = errorMessage
         }
@@ -228,7 +238,7 @@ export function useWalletOrchestrator({
           `[useWalletOrchestrator] Failed to initialize wallet for ${
             isSwitching ? 'switch' : 'load'
           }:`,
-          error,
+          error
         )
       }
     }
@@ -236,28 +246,28 @@ export function useWalletOrchestrator({
     const switchDecision = getWalletSwitchDecision(
       currentWalletId,
       activeWalletId,
-      hasAddresses,
+      hasAddresses
     )
     if (switchDecision.shouldSwitch) {
       log('[useWalletOrchestrator] Active wallet changed', {
         from: currentWalletId,
         to: activeWalletId,
         hasAddresses,
-        isWorkletStarted,
+        isWorkletStarted
       })
 
       if (isWorkletStarted) {
         if (isWalletInitializing) {
           log(
             '[useWalletOrchestrator] Skipping wallet switch initialization - already in progress',
-            { activeWalletId, walletLoadingState: walletLoadingState.type },
+            { activeWalletId, walletLoadingState: walletLoadingState.type }
           )
           return
         }
         initialize(activeWalletId, true)
       } else {
         walletStore.setState((prev) =>
-          updateWalletLoadingState(prev, { type: 'not_loaded' }),
+          updateWalletLoadingState(prev, { type: 'not_loaded' })
         )
       }
       return
@@ -272,7 +282,7 @@ export function useWalletOrchestrator({
       if (isWalletInitializing) {
         log(
           '[useWalletOrchestrator] Skipping wallet initialization - already in progress',
-          { activeWalletId, walletLoadingState: walletLoadingState.type },
+          { activeWalletId, walletLoadingState: walletLoadingState.type }
         )
         return
       }
@@ -284,8 +294,8 @@ export function useWalletOrchestrator({
           hasAddresses,
           isWorkletStarted,
           isWorkletInitialized,
-          walletLoadingState: walletLoadingState.type,
-        },
+          walletLoadingState: walletLoadingState.type
+        }
       )
       initialize(activeWalletId, false)
       return
@@ -297,17 +307,16 @@ export function useWalletOrchestrator({
         hasAddresses,
         currentWalletId,
         activeWalletId,
-        isWorkletInitialized,
+        isWorkletInitialized
       )
     ) {
       log('[useWalletOrchestrator] Wallet ready', { activeWalletId })
       walletStore.setState((prev) =>
         updateWalletLoadingState(prev, {
           type: 'ready',
-          identifier: activeWalletId,
-        }),
+          identifier: activeWalletId
+        })
       )
-      return
     }
   }, [
     enableAutoInitialization,
@@ -320,19 +329,20 @@ export function useWalletOrchestrator({
     isWorkletInitialized,
     createWallet,
     unlock,
+    walletStore
   ])
 
   const retry = useCallback(() => {
     log('[useWalletOrchestrator] Retrying initialization...')
     if (authErrorRef.current) {
       log(
-        '[useWalletOrchestrator] Clearing authentication error flag for retry',
+        '[useWalletOrchestrator] Clearing authentication error flag for retry'
       )
       authErrorRef.current = null
     }
     if (isWalletErrorState(walletLoadingState)) {
       walletStore.setState((prev) =>
-        updateWalletLoadingState(prev, { type: 'not_loaded' }),
+        updateWalletLoadingState(prev, { type: 'not_loaded' })
       )
     }
   }, [walletLoadingState, walletStore])
@@ -342,7 +352,7 @@ export function useWalletOrchestrator({
       walletLoadingState.type === 'error' ? walletLoadingState.error : null
     const topLevelError = workletError ? new Error(workletError) : walletError
 
-    if (topLevelError) {
+    if (topLevelError != null) {
       return { status: 'ERROR', error: topLevelError }
     }
 
@@ -364,11 +374,11 @@ export function useWalletOrchestrator({
     walletLoadingState,
     isWorkletInitialized,
     isWorkletStarted,
-    activeWalletId,
+    activeWalletId
   ])
 
   return {
     state,
-    retry,
+    retry
   }
 }

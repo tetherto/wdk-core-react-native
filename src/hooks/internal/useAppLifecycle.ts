@@ -15,16 +15,15 @@
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 
-import { getWalletStore } from '../../store/walletStore'
-import { updateWalletLoadingState } from '../../store/walletStore'
+import { getWalletStore, updateWalletLoadingState } from '../../store/walletStore'
 import { log } from '../../utils/logger'
 
 export interface UseAppLifecycleProps {
   clearSensitiveDataOnBackground: boolean
 }
 
-export function useAppLifecycle({
-  clearSensitiveDataOnBackground,
+export function useAppLifecycle ({
+  clearSensitiveDataOnBackground
 }: UseAppLifecycleProps): void {
   useEffect(() => {
     if (!clearSensitiveDataOnBackground) {
@@ -39,13 +38,12 @@ export function useAppLifecycle({
         const previousState = appStateRef.current
         appStateRef.current = nextAppState
 
-        // When going to background: clear cache and mark wallet for re-authentication
         if (
           (nextAppState === 'background' || nextAppState === 'inactive') &&
           previousState === 'active'
         ) {
           log(
-            '[useAppLifecycle] App going to background - clearing sensitive data and marking for re-auth',
+            '[useAppLifecycle] App going to background - clearing sensitive data and marking for re-auth'
           )
 
           // Reset wallet state to trigger re-authentication on foreground
@@ -55,12 +53,12 @@ export function useAppLifecycle({
 
           if (currentStateType === 'ready' && currentState.activeWalletId) {
             log(
-              '[useAppLifecycle] Resetting wallet state to trigger biometrics on foreground',
+              '[useAppLifecycle] Resetting wallet state to trigger biometrics on foreground'
             )
             walletStore.setState((prev) =>
               updateWalletLoadingState(prev, {
-                type: 'not_loaded',
-              }),
+                type: 'not_loaded'
+              })
             )
           } else if (
             currentStateType === 'loading' ||
@@ -69,8 +67,8 @@ export function useAppLifecycle({
             log(
               '[useAppLifecycle] Preserving wallet loading state during background transition',
               {
-                currentState: currentStateType,
-              },
+                currentState: currentStateType
+              }
             )
             // Do not reset - allow biometric authentication to complete
           }
@@ -82,10 +80,10 @@ export function useAppLifecycle({
           (previousState === 'background' || previousState === 'inactive')
         ) {
           log(
-            '[useAppLifecycle] App coming to foreground - auto-initialization will trigger biometrics',
+            '[useAppLifecycle] App coming to foreground - auto-initialization will trigger biometrics'
           )
         }
-      },
+      }
     )
 
     return () => subscription.remove()

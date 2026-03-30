@@ -99,7 +99,7 @@ export function useMultiAddressLoader({
     };
 
     loadAddresses();
-  }, [networksKey, accountIndex, enabled, activeWalletId]);
+  }, [networksKey, accountIndex, enabled, activeWalletId, addresses, error, isLoading, networks]);
 
   return { addresses, isLoading, error };
 }
