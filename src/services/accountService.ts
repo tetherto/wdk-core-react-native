@@ -107,12 +107,8 @@ export class AccountService {
       handleServiceError(
         error,
         'AccountService',
-        `callAccountMethod:${String(methodName)}`,
-        {
-          network,
-          accountIndex,
-          methodName,
-        },
+        `callAccountMethod:${String(methodName)}`
+        ,
       )
     }
   }

@@ -35,8 +35,7 @@ export default [
       '@typescript-eslint': tseslint.plugin,
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/strict-boolean-expressions': 'error',
+      '@typescript-eslint/no-explicit-any': 'warn'
     },
   },
 

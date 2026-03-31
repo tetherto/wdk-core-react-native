@@ -60,8 +60,6 @@ export function useAddressLoader({
   )
 
   useEffect(() => {
-    setError(null)
-
     const shouldLoad =
       activeWalletId &&
       !address &&
@@ -74,6 +72,8 @@ export function useAddressLoader({
     let isCancelled = false
 
     const load = async () => {
+      setError(null)
+
       try {
         await AddressService.getAddress(network, accountIndex, activeWalletId)
       } catch (e) {

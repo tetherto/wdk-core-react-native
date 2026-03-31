@@ -61,7 +61,7 @@ describe('errorHandling', () => {
       const context = { network: 'ethereum', accountIndex: 0 }
 
       expect(() => {
-        handleServiceError(error, 'TestService', 'testOperation', context)
+        handleServiceError(error, 'TestService', 'testOperation')
       }).toThrow('Normalized error')
 
       expect(normalizeError).toHaveBeenCalledWith(error, false, {

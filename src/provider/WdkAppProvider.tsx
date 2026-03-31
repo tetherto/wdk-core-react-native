@@ -78,10 +78,10 @@ export function WdkAppProvider<
   children,
 }: WdkAppProviderProps<TNetwork, TProtocol>) {
   // Synchronous service setup (must run before child effects)
-  const secureStorageInitialized = useRef(false)
+  const secureStorageInitialized = useRef<boolean | null>(null)
   const secureStorage = useMemo(() => createSecureStorage(), [])
 
-  if (!secureStorageInitialized.current) {
+  if (secureStorageInitialized.current == null) {
     WalletSetupService.setSecureStorage(secureStorage)
     secureStorageInitialized.current = true
   }
@@ -90,10 +90,7 @@ export function WdkAppProvider<
     try {
       validateWdkConfigs(wdkConfigs)
     } catch (error) {
-      const err = normalizeError(error, true, {
-        component: 'WdkAppProvider',
-        operation: 'propsValidation',
-      })
+      const err = normalizeError(error, true)
       logError('[WdkAppProviderV2] Invalid props:', err)
       throw err
     }

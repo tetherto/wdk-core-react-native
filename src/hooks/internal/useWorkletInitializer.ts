@@ -81,10 +81,7 @@ export function useWorkletInitializer<
         }
       } catch (error) {
         if (!cancelled) {
-          const err = normalizeError(error, true, {
-            component: 'useWorkletInitializer',
-            operation: 'workletInitialization',
-          })
+          const err = normalizeError(error, true)
           logError('[useWorkletInitializer] Failed to initialize worklet:', err)
         }
       }

@@ -175,8 +175,7 @@ function applySensitivePatternSanitization(message: string): string {
  */
 export function sanitizeErrorMessage(
   message: string,
-  isDevelopment = false,
-  context?: { operation?: string; component?: string }
+  isDevelopment = false
 ): string {
   if (isDevelopment) {
     return maskSensitiveStrings(message)
@@ -207,8 +206,7 @@ export function normalizeError(
   error: unknown,
   sanitizeLevel: SanitizationLevel | boolean = process.env.NODE_ENV === 'production' 
     ? SanitizationLevel.PRODUCTION 
-    : SanitizationLevel.DEVELOPMENT,
-  context?: { operation?: string; component?: string; [key: string]: unknown }
+    : SanitizationLevel.DEVELOPMENT
 ): Error {
   let errorMessage: string
 
@@ -230,8 +228,7 @@ export function normalizeError(
   if (level !== SanitizationLevel.NONE) {
     errorMessage = sanitizeErrorMessage(
       errorMessage,
-      level === SanitizationLevel.DEVELOPMENT,
-      context
+      level === SanitizationLevel.DEVELOPMENT
     )
   }
 
@@ -244,7 +241,7 @@ export function normalizeError(
     if (error.stack) {
       if (level !== SanitizationLevel.NONE) {
         // Mask file paths and sensitive data in stack traces
-        normalizedError.stack = sanitizeErrorMessage(error.stack, level === SanitizationLevel.DEVELOPMENT, context)
+        normalizedError.stack = sanitizeErrorMessage(error.stack, level === SanitizationLevel.DEVELOPMENT)
       } else {
         normalizedError.stack = error.stack
       }

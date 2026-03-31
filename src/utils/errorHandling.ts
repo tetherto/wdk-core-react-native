@@ -65,10 +65,9 @@ import { logError } from './logger'
 export function handleServiceError(
   error: unknown,
   component: string,
-  operation: string,
-  context?: Record<string, unknown>
+  operation: string
 ): never {
-  const normalized = normalizeError(error, false, { component, operation, ...context })
+  const normalized = normalizeError(error, false)
   logError(`[${component}] ${operation} failed:`, normalized)
   throw normalized
 }

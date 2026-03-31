@@ -146,11 +146,7 @@ export class AddressService {
         }),
       )
 
-      handleServiceError(error, 'AddressService', 'getAddress', {
-        network,
-        accountIndex,
-        walletId: targetWalletId,
-      })
+      handleServiceError(error, 'AddressService', 'getAddress')
     }
   }
 

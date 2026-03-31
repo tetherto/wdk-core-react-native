@@ -61,8 +61,7 @@ export class WalletSwitchingService {
    * ```
    */
   static async switchToWallet(
-    walletId: string,
-    options?: { autoStartWorklet?: boolean },
+    walletId: string
   ): Promise<void> {
     return withOperationMutex(`switchToWallet:${walletId}`, async () => {
       const walletStore = getWalletStore()
@@ -133,11 +132,7 @@ export class WalletSwitchingService {
         })
       } catch (error) {
         // Cleanup state on error
-        const normalizedError = normalizeError(error, false, {
-          component: 'WalletSwitchingService',
-          operation: 'switchToWallet',
-          walletId,
-        })
+        const normalizedError = normalizeError(error, false)
         logError(
           '[WalletSwitchingService] Failed to switch wallet, cleaning up state',
           normalizedError,
@@ -177,11 +172,7 @@ export class WalletSwitchingService {
       return await WalletSetupService.hasWallet(walletId)
     } catch (error) {
       // Log error but don't throw - this is a non-critical check
-      const normalizedError = normalizeError(error, false, {
-        component: 'WalletSwitchingService',
-        operation: 'canSwitchToWallet',
-        walletId,
-      })
+      const normalizedError = normalizeError(error, false)
       logError(
         '[WalletSwitchingService] Failed to check wallet:',
         normalizedError,

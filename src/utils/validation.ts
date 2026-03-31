@@ -89,7 +89,7 @@ export function validateRequiredMethods(
   requiredMethods: string[],
   objectName: string
 ): void {
-  if (!obj || typeof obj !== 'object') {
+  if (obj === null || typeof obj !== 'object') {
     throw new Error(`${objectName} must be an object`)
   }
 
@@ -179,6 +179,8 @@ export function validateWalletParams(
 ): void {
   validateNetworkName(network)
   validateAccountIndex(accountIndex)
-  assetId && validateAssetId(assetId)
+  if (assetId !== undefined) {
+    validateAssetId(assetId)
+  } 
 }
 
