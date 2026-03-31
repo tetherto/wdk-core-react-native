@@ -80,7 +80,9 @@ export function useMultiAddressLoader({
         // Create a map for efficient lookups.
         const addressMap = new Map<string, string>();
         uniqueNetworks.forEach((network, index) => {
-          addressMap.set(network, loadedAddresses[index]);
+          if (loadedAddresses[index] !== undefined) {
+            addressMap.set(network, loadedAddresses[index]);
+          }
         });
 
         const finalAddresses = networks.map((network) => ({

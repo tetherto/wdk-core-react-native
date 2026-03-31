@@ -130,14 +130,14 @@ export function updateAddressInState(
  * ```
  */
 export function resolveWalletId(walletId?: string): string {
-  if (walletId) {
+  if (walletId !== undefined && walletId !== '') {
     return walletId
   }
 
   const walletStore = getWalletStore()
   const activeWalletId = walletStore.getState().activeWalletId
 
-  return activeWalletId || '__temporary__'
+  return activeWalletId ?? '__temporary__'
 }
 
 /**

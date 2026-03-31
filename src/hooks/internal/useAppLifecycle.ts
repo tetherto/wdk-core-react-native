@@ -51,7 +51,7 @@ export function useAppLifecycle ({
           const currentState = walletStore.getState()
           const currentStateType = currentState.walletLoadingState.type
 
-          if (currentStateType === 'ready' && currentState.activeWalletId) {
+          if (currentStateType === 'ready' && currentState.activeWalletId !== null) {
             log(
               '[useAppLifecycle] Resetting wallet state to trigger biometrics on foreground'
             )

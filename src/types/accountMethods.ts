@@ -80,4 +80,8 @@ export interface DefaultAccountMethods extends MethodMap {
     params: [tx: { recipient: string; amount: string; token: string }]
     result: { fee: string }
   }
+  getAddress: {
+    params: []
+    result: string
+  }
 }

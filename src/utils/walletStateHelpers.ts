@@ -41,7 +41,7 @@ export function shouldResetToNotLoaded(
   activeWalletId: string | null,
   walletLoadingState: WalletLoadingState
 ): boolean {
-  return !activeWalletId && walletLoadingState.type !== 'not_loaded'
+  return activeWalletId === null && walletLoadingState.type !== 'not_loaded'
 }
 
 /**
@@ -111,7 +111,7 @@ export function shouldHandleError(
   activeWalletId: string | null,
   walletLoadingState: WalletLoadingState
 ): boolean {
-  if (!walletManagerError) return false
+  if (walletManagerError === null) return false
   // Only update error if we're tracking this wallet
   return currentWalletId === activeWalletId || walletLoadingState.type === 'not_loaded'
 }

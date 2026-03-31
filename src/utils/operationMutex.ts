@@ -174,7 +174,7 @@ export async function withOperationMutex<T>(
     throw error
   } finally {
     // Clear timeout if operation completed before timeout
-    if (timeoutId) {
+    if (timeoutId !== null) {
       clearTimeout(timeoutId)
     }
     // Only release if timeout didn't already release it

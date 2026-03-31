@@ -178,7 +178,7 @@ export function useWalletOrchestrator ({
       log(
         '[useWalletOrchestrator] Active wallet cleared, resetting wallet state'
       )
-      if (authErrorRef.current) {
+      if (authErrorRef.current !== null) {
         log(
           '[useWalletOrchestrator] Clearing authentication error flag on wallet reset'
         )
@@ -190,7 +190,7 @@ export function useWalletOrchestrator ({
       return
     }
 
-    if (!activeWalletId) {
+    if (activeWalletId === null) {
       return
     }
 
@@ -334,7 +334,7 @@ export function useWalletOrchestrator ({
 
   const retry = useCallback(() => {
     log('[useWalletOrchestrator] Retrying initialization...')
-    if (authErrorRef.current) {
+    if (authErrorRef.current !== null) {
       log(
         '[useWalletOrchestrator] Clearing authentication error flag for retry'
       )
@@ -350,21 +350,21 @@ export function useWalletOrchestrator ({
   const state = useMemo((): WdkAppState => {
     const walletError =
       walletLoadingState.type === 'error' ? walletLoadingState.error : null
-    const topLevelError = workletError ? new Error(workletError) : walletError
+    const topLevelError = workletError !== null ? new Error(workletError) : walletError
 
     if (topLevelError != null) {
       return { status: 'ERROR', error: topLevelError }
     }
 
-    if (isWorkletInitialized && activeWalletId) {
+    if (isWorkletInitialized && activeWalletId !== null) {
       return { status: 'READY', walletId: activeWalletId }
     }
 
-    if (isWorkletStarted && !activeWalletId) {
+    if (isWorkletStarted && activeWalletId === null) {
       return { status: 'NO_WALLET' }
     }
 
-    if (isWorkletStarted && activeWalletId) {
+    if (isWorkletStarted && activeWalletId !== null) {
       return { status: 'LOCKED', walletId: activeWalletId }
     }
 

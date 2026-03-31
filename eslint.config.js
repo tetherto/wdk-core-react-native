@@ -6,7 +6,6 @@ import pluginReactHooks from 'eslint-plugin-react-hooks';
 
 export default [
   {
-    // Global ignores
     ignores: [
       'dist/',
       'node_modules/',
@@ -14,13 +13,10 @@ export default [
       'src/__tests__/',
     ],
   },
-  // Base JS recommended rules
   pluginJs.configs.recommended,
-
-  // TypeScript configurations
-  ...tseslint.configs.recommended, // Includes recommended rules for TypeScript
+  ...tseslint.configs.recommended,
   {
-    files: ['**/*.{ts,tsx,mts,cts}'], // Apply to TypeScript files
+    files: ['**/*.{ts,tsx,mts,cts}'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -29,41 +25,26 @@ export default [
         ecmaFeatures: {
           jsx: true,
         },
-        project: './tsconfig.json', // Required for type-aware linting
-        // Adding tsconfigRootDir to help resolve tsconfig.json in some setups
-        // tsconfigRootDir: import.meta.dirname,
+        project: './tsconfig.json',
       },
       globals: {
         ...globals.browser,
-        // Add any other specific globals if needed, e.g., for React Native environment
       },
     },
     plugins: {
       '@typescript-eslint': tseslint.plugin,
     },
     rules: {
-      // Custom TypeScript rules or overrides
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/strict-boolean-expressions': [
-        'error',
-        {
-          allowString: false,
-          allowNumber: false,
-          allowNullableObject: false,
-          allowNullableBoolean: false,
-          allowNullableString: false,
-          allowNullableNumber: false,
-        },
-      ],
+      '@typescript-eslint/strict-boolean-expressions': 'error',
     },
   },
 
-  // React configurations
   {
-    files: ['**/*.{js,jsx,ts,tsx,mjs,cjs}'], // Apply React rules to relevant files
+    files: ['**/*.{js,jsx,ts,tsx,mjs,cjs}'],
     settings: {
       react: {
-        version: 'detect', // Automatically detects the React version
+        version: 'detect',
       },
     },
     plugins: {
@@ -71,18 +52,18 @@ export default [
       'react-hooks': pluginReactHooks,
     },
     rules: {
-      ...pluginReact.configs.recommended.rules, // React recommended rules
-      ...pluginReactHooks.configs.recommended.rules, // React Hooks recommended rules
-      'react/react-in-jsx-scope': 'off', // Not needed for React 17+ with new JSX transform
-      'react/jsx-uses-react': 'off', // Not needed for React 17+ with new JSX transform
+      ...pluginReact.configs.recommended.rules,
+      ...pluginReactHooks.configs.recommended.rules,
+      'react/react-in-jsx-scope': 'off',
+      'react/jsx-uses-react': 'off',
     },
   },
   {
-    files: ['**/*.cjs'], // Apply this config specifically to CommonJS files
+    files: ['**/*.cjs'],
     languageOptions: {
       sourceType: 'commonjs',
       globals: {
-        ...globals.node, // Add Node.js global variables for CommonJS files
+        ...globals.node,
       },
     },
   },
