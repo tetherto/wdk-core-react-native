@@ -204,6 +204,7 @@ export class WorkletLifecycleService {
 
       store.setState({
         isInitialized: true,
+        isReinitialized: false,
         isLoading: false,
         wdkInitResult,
         error: null,
@@ -218,6 +219,7 @@ export class WorkletLifecycleService {
           error: normalizedError.message,
           isLoading: false,
           isInitialized: false,
+          isReinitialized: false
         }),
       )
     }
