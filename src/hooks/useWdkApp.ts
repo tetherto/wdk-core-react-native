@@ -96,6 +96,7 @@ export function useWdkApp(): UseWdkAppResult {
       try {
         workletStore.setState({
           isInitialized: false,
+          isReinitialized: true,
           wdkInitResult: null,
           isWorkletInitializedPromise: createResolvablePromise<boolean>(),
         });

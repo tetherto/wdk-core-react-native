@@ -46,6 +46,7 @@ export interface UseWorkletResult {
   // State (reactive)
   isWorkletStarted: boolean
   isInitialized: boolean
+  isReinitialized: boolean
   isLoading: boolean
   error: string | null
   hrpc: HRPC | null
@@ -83,6 +84,7 @@ export function useWorklet(): UseWorkletResult {
   const selector = useShallow((state: WorkletStore) => ({
     isWorkletStarted: state.isWorkletStarted,
     isInitialized: state.isInitialized,
+    isReinitialized: state.isReinitialized,
     isLoading: state.isLoading,
     error: state.error,
     hrpc: state.hrpc,
@@ -96,6 +98,7 @@ export function useWorklet(): UseWorkletResult {
   return {
     isWorkletStarted: workletState.isWorkletStarted,
     isInitialized: workletState.isInitialized,
+    isReinitialized: workletState.isReinitialized,
     isLoading: workletState.isLoading,
     error: workletState.error,
     hrpc: workletState.hrpc,
