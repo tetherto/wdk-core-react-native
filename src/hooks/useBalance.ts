@@ -341,8 +341,7 @@ type FetchBalancesResult =
 async function fetchBalances(
   accountIndex: number,
   assets: IAsset[],
-  onPartialResult?: (results: BalanceFetchResult[]) => void,
-  networkTimeoutMs: number = 8_000,
+  networkTimeoutMs: number = 15_000,
 ): Promise<BalanceFetchResult[]> {
   const assetsByNetwork = new Map<string, IAsset[]>();
   assets.forEach(asset => {
@@ -452,17 +451,6 @@ async function fetchBalances(
         log(`[fetchBalances] Fetched balances for network ${network}:${accountIndex}`);
       }
 
-      if (onPartialResult) {
-        onPartialResult(networkResults.map(result => {
-          const assetId = result.asset.getId();
-          if (result.success) {
-            return { success: true, network, accountIndex, assetId, balance: result.balance };
-          }
-          const errorMessage = result.error instanceof Error ? result.error.message : String(result.error);
-          return { success: false, network, accountIndex, assetId, balance: null, error: errorMessage };
-        }));
-      }
-
       return networkResults;
     },
   );
@@ -556,7 +544,6 @@ export function useBalancesForWallet(
   });
 
   const walletId = getWalletStore()((state) => state.activeWalletId);
-  const queryClient = useQueryClient();
   const queryKey = [...balanceQueryKeys.byWallet(walletId || '', accountIndex), 'all'] as const;
 
   const initialData: BalanceFetchResult[] | undefined = (() => {
@@ -584,18 +571,7 @@ export function useBalancesForWallet(
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchBalances(accountIndex, assetConfigs, (partialResults) => {
-      queryClient.setQueryData<BalanceFetchResult[]>(queryKey, (prev) => {
-        if (!prev) return partialResults;
-        const updated = [...prev];
-        for (const r of partialResults) {
-          const idx = updated.findIndex(x => x.network === r.network && x.assetId === r.assetId);
-          if (idx >= 0) updated[idx] = r;
-          else updated.push(r);
-        }
-        return updated;
-      });
-    }),
+    queryFn: () => fetchBalances(accountIndex, assetConfigs),
     enabled: isQueryEnabled(
       options?.enabled,
       !!walletId && !areAddressesLoading && assetConfigs.length > 0,
