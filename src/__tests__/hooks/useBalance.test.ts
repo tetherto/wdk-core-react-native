@@ -28,11 +28,23 @@ import { QUERY_KEY_TAGS } from '../../utils/constants'
 import type { IAsset } from '../../types'
 
 // Mock TanStack Query
+const mockUseQueryReturn = jest.fn()
 jest.mock('@tanstack/react-query', () => ({
-  useQuery: jest.fn(),
+  useQuery: (...args: any[]) => mockUseQueryReturn(...args),
   useMutation: jest.fn(),
   useQueries: jest.fn(),
   useQueryClient: jest.fn(),
+}))
+
+// Mock address loaders
+const mockUseAddressLoader = jest.fn()
+jest.mock('../../hooks/useAddressLoader', () => ({
+  useAddressLoader: (...args: any[]) => mockUseAddressLoader(...args),
+}))
+
+const mockUseMultiAddressLoader = jest.fn()
+jest.mock('../../hooks/useMultiAddressLoader', () => ({
+  useMultiAddressLoader: (...args: any[]) => mockUseMultiAddressLoader(...args),
 }))
 
 // Mock stores and services
@@ -163,12 +175,7 @@ describe('useBalance', () => {
     it('should handle wallet not initialized', async () => {
       mockWorkletStore.getState.mockReturnValue({ isInitialized: false })
 
-      // Import after mocks are set up
-      const { useBalance } = await import('../../hooks/useBalance')
-      const { useQuery } = await import('@tanstack/react-query')
-
-      const mockUseQuery = useQuery as jest.Mock
-      mockUseQuery.mockReturnValue({
+      mockUseQueryReturn.mockReturnValue({
         data: {
           success: false,
           network: 'ethereum',
@@ -178,11 +185,13 @@ describe('useBalance', () => {
           error: 'Wallet not initialized',
         },
         isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: true,
         error: null,
       })
 
       // The hook would be called in a React component, but we can test the query function
-      expect(mockUseQuery).toBeDefined()
+      expect(mockUseQueryReturn).toBeDefined()
     })
 
     it('should fetch native balance successfully', async () => {
@@ -192,11 +201,8 @@ describe('useBalance', () => {
       )
       ;(convertBalanceToString as jest.Mock).mockReturnValue(mockBalance)
 
-      const { useQuery } = await import('@tanstack/react-query')
-      const mockUseQuery = useQuery as jest.Mock
-
       // Simulate query function call
-      const queryFn = mockUseQuery.mock.calls[0]?.[0]?.queryFn
+      const queryFn = mockUseQueryReturn.mock.calls[0]?.[0]?.queryFn
       if (queryFn) {
         const result = await queryFn()
         expect(result.success).toBe(true)
@@ -214,11 +220,8 @@ describe('useBalance', () => {
       )
       ;(convertBalanceToString as jest.Mock).mockReturnValue(mockBalance)
 
-      const { useQuery } = await import('@tanstack/react-query')
-      const mockUseQuery = useQuery as jest.Mock
-
       // Simulate query function call
-      const queryFn = mockUseQuery.mock.calls[0]?.[0]?.queryFn
+      const queryFn = mockUseQueryReturn.mock.calls[0]?.[0]?.queryFn
       if (queryFn) {
         const result = await queryFn()
         expect(result.success).toBe(true)
@@ -236,11 +239,8 @@ describe('useBalance', () => {
       const error = new Error('Network error')
       ;(AccountService.callAccountMethod as jest.Mock).mockRejectedValue(error)
 
-      const { useQuery } = await import('@tanstack/react-query')
-      const mockUseQuery = useQuery as jest.Mock
-
       // Simulate query function call
-      const queryFn = mockUseQuery.mock.calls[0]?.[0]?.queryFn
+      const queryFn = mockUseQueryReturn.mock.calls[0]?.[0]?.queryFn
       if (queryFn) {
         const result = await queryFn()
         expect(result.success).toBe(false)
@@ -268,17 +268,213 @@ describe('useBalance', () => {
         } as IAsset
       ]
 
-      const { useQuery } = await import('@tanstack/react-query')
-      const mockUseQuery = useQuery as jest.Mock
-      mockUseQuery.mockReturnValue({
+      mockUseQueryReturn.mockReturnValue({
         data: [],
         isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: true,
         error: null,
       })
 
       // We just check the hook can be imported and mocking works
       // Logic testing for IAsset iteration happens in the hook implementation
-      expect(mockUseQuery).toBeDefined()
+      expect(mockUseQueryReturn).toBeDefined()
+    })
+  })
+
+  describe('useBalance isLoading composition', () => {
+    const mockAsset: IAsset = {
+      getId: () => MOCK_NATIVE_TOKEN_ID,
+      getNetwork: () => 'ethereum',
+      isNative: () => true,
+      getContractAddress: () => null,
+    } as IAsset
+
+    beforeEach(() => {
+      ;(getWalletStore as jest.Mock).mockReturnValue(() => 'test-wallet-1')
+      ;(BalanceService.getBalance as jest.Mock).mockReturnValue(null)
+    })
+
+    it('should report isLoading true during initial fetch with initialData', () => {
+      mockUseAddressLoader.mockReturnValue({
+        address: '0xabc',
+        isLoading: false,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: [{ success: true, balance: null }],
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: false,
+        error: null,
+      })
+
+      const { useBalance } = require('../../hooks/useBalance')
+      const result = useBalance(0, mockAsset)
+
+      expect(result.isLoading).toBe(true)
+    })
+
+    it('should report isLoading false after initial fetch completes', () => {
+      mockUseAddressLoader.mockReturnValue({
+        address: '0xabc',
+        isLoading: false,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: [{ success: true, balance: '1000' }],
+        isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalance } = require('../../hooks/useBalance')
+      const result = useBalance(0, mockAsset)
+
+      expect(result.isLoading).toBe(false)
+    })
+
+    it('should report isLoading false during background refetch', () => {
+      mockUseAddressLoader.mockReturnValue({
+        address: '0xabc',
+        isLoading: false,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: [{ success: true, balance: '1000' }],
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalance } = require('../../hooks/useBalance')
+      const result = useBalance(0, mockAsset)
+
+      expect(result.isLoading).toBe(false)
+    })
+
+    it('should report isLoading true when address is still loading', () => {
+      mockUseAddressLoader.mockReturnValue({
+        address: null,
+        isLoading: true,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: false,
+        error: null,
+      })
+
+      const { useBalance } = require('../../hooks/useBalance')
+      const result = useBalance(0, mockAsset)
+
+      expect(result.isLoading).toBe(true)
+    })
+  })
+
+  describe('useBalancesForWallet isLoading composition', () => {
+    const mockAssets: IAsset[] = [
+      {
+        getId: () => MOCK_NATIVE_TOKEN_ID,
+        getNetwork: () => 'ethereum',
+        isNative: () => true,
+        getContractAddress: () => null,
+      } as IAsset,
+      {
+        getId: () => 'usdt',
+        getNetwork: () => 'ethereum',
+        isNative: () => false,
+        getContractAddress: () => '0x123',
+      } as IAsset,
+    ]
+
+    beforeEach(() => {
+      ;(getWalletStore as jest.Mock).mockReturnValue(() => 'test-wallet-1')
+      ;(BalanceService.getBalance as jest.Mock).mockReturnValue(null)
+    })
+
+    it('should report isLoading true during initial fetch with initialData', () => {
+      mockUseMultiAddressLoader.mockReturnValue({
+        addresses: [{ network: 'ethereum', address: '0xabc' }],
+        isLoading: false,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: mockAssets.map((a) => ({ success: true, balance: null, network: a.getNetwork(), assetId: a.getId(), accountIndex: 0 })),
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: false,
+        error: null,
+      })
+
+      const { useBalancesForWallet } = require('../../hooks/useBalance')
+      const result = useBalancesForWallet(0, mockAssets)
+
+      expect(result.isLoading).toBe(true)
+    })
+
+    it('should report isLoading false after initial fetch completes', () => {
+      mockUseMultiAddressLoader.mockReturnValue({
+        addresses: [{ network: 'ethereum', address: '0xabc' }],
+        isLoading: false,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: mockAssets.map((a) => ({ success: true, balance: '1000', network: a.getNetwork(), assetId: a.getId(), accountIndex: 0 })),
+        isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalancesForWallet } = require('../../hooks/useBalance')
+      const result = useBalancesForWallet(0, mockAssets)
+
+      expect(result.isLoading).toBe(false)
+    })
+
+    it('should report isLoading false during background refetch', () => {
+      mockUseMultiAddressLoader.mockReturnValue({
+        addresses: [{ network: 'ethereum', address: '0xabc' }],
+        isLoading: false,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: mockAssets.map((a) => ({ success: true, balance: '1000', network: a.getNetwork(), assetId: a.getId(), accountIndex: 0 })),
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalancesForWallet } = require('../../hooks/useBalance')
+      const result = useBalancesForWallet(0, mockAssets)
+
+      expect(result.isLoading).toBe(false)
+    })
+
+    it('should report isLoading true when addresses are still loading', () => {
+      mockUseMultiAddressLoader.mockReturnValue({
+        addresses: null,
+        isLoading: true,
+        error: null,
+      })
+      mockUseQueryReturn.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: false,
+        error: null,
+      })
+
+      const { useBalancesForWallet } = require('../../hooks/useBalance')
+      const result = useBalancesForWallet(0, mockAssets)
+
+      expect(result.isLoading).toBe(true)
     })
   })
 
