@@ -328,7 +328,7 @@ export function useBalance(
     initialData,
   })
 
-  const isLoading = isAddressLoading || (query.isLoading && !!address)
+  const isLoading = isAddressLoading || (query.isLoading && !!address) || (query.isFetching && !query.isFetchedAfterMount)
   const error = addressError || query.error
 
   return { ...query, isLoading, error }
@@ -568,7 +568,7 @@ export function useBalancesForWallet(
     initialData,
   });
 
-  const isLoading = areAddressesLoading || query.isLoading;
+  const isLoading = areAddressesLoading || query.isLoading || (query.isFetching && !query.isFetchedAfterMount);
   const error = addressesError || query.error;
 
   return { ...query, isLoading, error: error as Error | null };
