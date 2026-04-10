@@ -268,6 +268,195 @@ describe('useBalance', () => {
     })
   })
 
+  describe('useBalance isLoading composition', () => {
+    const mockAsset: IAsset = {
+      getId: () => MOCK_NATIVE_TOKEN_ID,
+      getNetwork: () => 'ethereum',
+      isNative: () => true,
+      getContractAddress: () => null,
+    } as IAsset
+
+    it('should report isLoading true during initial fetch with initialData', async () => {
+      const { useQuery } = await import('@tanstack/react-query')
+      const mockUseQuery = useQuery as jest.Mock
+      mockUseQuery.mockReturnValue({
+        data: { success: true, balance: null },
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: false,
+        error: null,
+      })
+
+      const { useBalance } = await import('../../hooks/useBalance')
+      const result = useBalance('ethereum', 0, mockAsset)
+
+      expect(result.isLoading).toBe(true)
+    })
+
+    it('should report isLoading false after initial fetch completes', async () => {
+      const { useQuery } = await import('@tanstack/react-query')
+      const mockUseQuery = useQuery as jest.Mock
+      mockUseQuery.mockReturnValue({
+        data: { success: true, balance: '1000' },
+        isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalance } = await import('../../hooks/useBalance')
+      const result = useBalance('ethereum', 0, mockAsset)
+
+      expect(result.isLoading).toBe(false)
+    })
+
+    it('should report isLoading false during background refetch', async () => {
+      const { useQuery } = await import('@tanstack/react-query')
+      const mockUseQuery = useQuery as jest.Mock
+      mockUseQuery.mockReturnValue({
+        data: { success: true, balance: '1000' },
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalance } = await import('../../hooks/useBalance')
+      const result = useBalance('ethereum', 0, mockAsset)
+
+      expect(result.isLoading).toBe(false)
+    })
+  })
+
+  describe('useBalancesForWallet isLoading composition', () => {
+    const mockAssets: IAsset[] = [
+      {
+        getId: () => MOCK_NATIVE_TOKEN_ID,
+        getNetwork: () => 'ethereum',
+        isNative: () => true,
+        getContractAddress: () => null,
+      } as IAsset,
+      {
+        getId: () => 'usdt',
+        getNetwork: () => 'ethereum',
+        isNative: () => false,
+        getContractAddress: () => '0x123',
+      } as IAsset,
+    ]
+
+    it('should report isLoading true during initial fetch with initialData', async () => {
+      const { useQuery } = await import('@tanstack/react-query')
+      const mockUseQuery = useQuery as jest.Mock
+      mockUseQuery.mockReturnValue({
+        data: [],
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: false,
+        error: null,
+      })
+
+      const { useBalancesForWallet } = await import('../../hooks/useBalance')
+      const result = useBalancesForWallet(0, mockAssets)
+
+      expect(result.isLoading).toBe(true)
+    })
+
+    it('should report isLoading false after initial fetch completes', async () => {
+      const { useQuery } = await import('@tanstack/react-query')
+      const mockUseQuery = useQuery as jest.Mock
+      mockUseQuery.mockReturnValue({
+        data: [],
+        isLoading: false,
+        isFetching: false,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalancesForWallet } = await import('../../hooks/useBalance')
+      const result = useBalancesForWallet(0, mockAssets)
+
+      expect(result.isLoading).toBe(false)
+    })
+
+    it('should report isLoading false during background refetch', async () => {
+      const { useQuery } = await import('@tanstack/react-query')
+      const mockUseQuery = useQuery as jest.Mock
+      mockUseQuery.mockReturnValue({
+        data: [],
+        isLoading: false,
+        isFetching: true,
+        isFetchedAfterMount: true,
+        error: null,
+      })
+
+      const { useBalancesForWallet } = await import('../../hooks/useBalance')
+      const result = useBalancesForWallet(0, mockAssets)
+
+      expect(result.isLoading).toBe(false)
+    })
+  })
+
+  describe('useBalancesForWallets isLoading composition', () => {
+    const mockAssets: IAsset[] = [
+      {
+        getId: () => MOCK_NATIVE_TOKEN_ID,
+        getNetwork: () => 'ethereum',
+        isNative: () => true,
+        getContractAddress: () => null,
+      } as IAsset,
+    ]
+
+    const mockWallets = [
+      { accountIndex: 0, identifier: 'wallet-1' },
+      { accountIndex: 1, identifier: 'wallet-2' },
+    ]
+
+    it('should report isLoading true for each wallet during initial fetch', async () => {
+      const { useQueries } = await import('@tanstack/react-query')
+      const mockUseQueries = useQueries as jest.Mock
+      mockUseQueries.mockReturnValue([
+        { data: [], isLoading: false, isFetching: true, isFetchedAfterMount: false, error: null },
+        { data: [], isLoading: false, isFetching: true, isFetchedAfterMount: false, error: null },
+      ])
+
+      const { useBalancesForWallets } = await import('../../hooks/useBalance')
+      const results = useBalancesForWallets(mockWallets, mockAssets)
+
+      expect(results[0]!.isLoading).toBe(true)
+      expect(results[1]!.isLoading).toBe(true)
+    })
+
+    it('should report isLoading false for each wallet after fetch completes', async () => {
+      const { useQueries } = await import('@tanstack/react-query')
+      const mockUseQueries = useQueries as jest.Mock
+      mockUseQueries.mockReturnValue([
+        { data: [], isLoading: false, isFetching: false, isFetchedAfterMount: true, error: null },
+        { data: [], isLoading: false, isFetching: false, isFetchedAfterMount: true, error: null },
+      ])
+
+      const { useBalancesForWallets } = await import('../../hooks/useBalance')
+      const results = useBalancesForWallets(mockWallets, mockAssets)
+
+      expect(results[0]!.isLoading).toBe(false)
+      expect(results[1]!.isLoading).toBe(false)
+    })
+
+    it('should report isLoading false for each wallet during background refetch', async () => {
+      const { useQueries } = await import('@tanstack/react-query')
+      const mockUseQueries = useQueries as jest.Mock
+      mockUseQueries.mockReturnValue([
+        { data: [], isLoading: false, isFetching: true, isFetchedAfterMount: true, error: null },
+        { data: [], isLoading: false, isFetching: true, isFetchedAfterMount: true, error: null },
+      ])
+
+      const { useBalancesForWallets } = await import('../../hooks/useBalance')
+      const results = useBalancesForWallets(mockWallets, mockAssets)
+
+      expect(results[0]!.isLoading).toBe(false)
+      expect(results[1]!.isLoading).toBe(false)
+    })
+  })
+
   describe('useRefreshBalance', () => {
     it('should invalidate queries correctly', async () => {
       // Since we can't actually call React hooks in Node environment,
