@@ -299,7 +299,7 @@ export function useBalance(
       }
     : undefined
 
-  return useQuery({
+  const query = useQuery({
     queryKey: balanceQueryKeys.byToken(walletId, accountIndex, network, assetId),
     queryFn: () => fetchBalance(network, accountIndex, asset, walletId),
     enabled: isQueryEnabled(options?.enabled, isInitialized),
@@ -309,6 +309,11 @@ export function useBalance(
     // Use Zustand as initial data source (single source of truth)
     initialData,
   })
+
+  return {
+    ...query,
+    isLoading: query.isLoading || (query.isFetching && !query.isFetchedAfterMount),
+  }
 }
 
 async function fetchBalancesForAssets(
@@ -375,7 +380,7 @@ export function useBalancesForWallet(
     return hasAnyInitialData ? initialBalances : undefined
   })()
 
-  return useQuery({
+  const query = useQuery({
     queryKey: [...balanceQueryKeys.byWallet(walletId, accountIndex), 'all'],
     queryFn: () => fetchBalancesForAssets(accountIndex, walletId, assetConfigs),
     enabled: isQueryEnabled(options?.enabled, isInitialized, assetConfigs.length > 0),
@@ -385,6 +390,11 @@ export function useBalancesForWallet(
     // Use Zustand as initial data source
     initialData,
   })
+
+  return {
+    ...query,
+    isLoading: query.isLoading || (query.isFetching && !query.isFetchedAfterMount),
+  }
 }
 
 /**
@@ -403,10 +413,10 @@ export function useBalancesForWallets(
   const workletStore = getWorkletStore()
   const isInitialized = workletStore.getState().isInitialized
 
-  return useQueries({
+  const queries = useQueries({
     queries: wallets.map((wallet) => {
       const { accountIndex, identifier } = wallet
-      
+
       // Get initial data from Zustand
       const initialData: BalanceFetchResult[] | undefined = (() => {
         const initialBalances: BalanceFetchResult[] = []
@@ -449,6 +459,11 @@ export function useBalancesForWallets(
       }
     }),
   })
+
+  return queries.map((query) => ({
+    ...query,
+    isLoading: query.isLoading || (query.isFetching && !query.isFetchedAfterMount),
+  }))
 }
 
 /**
