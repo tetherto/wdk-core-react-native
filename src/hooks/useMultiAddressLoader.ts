@@ -55,9 +55,9 @@ export function useMultiAddressLoader({
   useEffect(() => {
     const loadAddresses = async () => {
       if (!enabled || networks.length === 0 || !activeWalletId) {
-        if (isLoading) setIsLoading(false);
-        if (error) setError(null);
-        if (addresses) setAddresses(null);
+        setIsLoading(false);
+        setError(null);
+        setAddresses(null);
         return;
       }
 
@@ -99,7 +99,7 @@ export function useMultiAddressLoader({
     };
 
     loadAddresses();
-  }, [networksKey, accountIndex, enabled, activeWalletId, addresses, error, isLoading, networks]);
+  }, [networksKey, accountIndex, enabled, activeWalletId, networks]);
 
   return { addresses, isLoading, error };
 }

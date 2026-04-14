@@ -75,7 +75,7 @@ import { log, logError, logWarn } from '../utils/logger'
 import { useAddressLoader } from './useAddressLoader';
 import { useMultiAddressLoader } from './useMultiAddressLoader';
 import type { BalanceFetchResult, IAsset } from '../types'
-
+import { useMemo } from 'react'
 
 /**
  * Balance query options
@@ -532,7 +532,10 @@ export function useBalancesForWallet(
   assetConfigs: IAsset[],
   options?: BalanceQueryOptions,
 ): UseBalancesForWalletResult {
-  const uniqueNetworks = [...new Set(assetConfigs.map((asset) => asset.getNetwork()))];
+  const uniqueNetworks = useMemo(
+    () => [...new Set(assetConfigs.map((asset) => asset.getNetwork()))],
+    [assetConfigs],
+  );
 
   const {
     isLoading: areAddressesLoading,

@@ -79,7 +79,7 @@ export function WdkAppProvider<
   children,
 }: WdkAppProviderProps<TNetwork, TProtocol>) {
   // Synchronous service setup (must run before child effects)
-  const secureStorageInitialized = useRef(false)
+  const secureStorageInitialized = useRef<boolean | undefined>(undefined)
   const secureStorage = useMemo(() => createSecureStorage(), [])
 
   if (secureStorageInitialized.current == null) {
