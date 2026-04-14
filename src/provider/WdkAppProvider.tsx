@@ -32,6 +32,7 @@ import type { WdkConfigs, BundleConfig } from '../types'
 
 export type WdkAppState =
   | { status: 'INITIALIZING' }
+  | { status: 'REINITIALIZING' }
   | { status: 'NO_WALLET' }
   | { status: 'LOCKED'; walletId: string }
   | { status: 'READY'; walletId: string }
@@ -99,6 +100,7 @@ export function WdkAppProvider<
   const {
     isWorkletStarted,
     isInitialized: isWorkletInitialized,
+    isReinitialized: isWdkReinitialized,
     error: workletError,
   } = useWorkletInitializer({
     bundleConfig,
@@ -112,6 +114,7 @@ export function WdkAppProvider<
     currentUserId,
     isWorkletStarted,
     isWorkletInitialized,
+    isWdkReinitialized,
     workletError,
   })
 

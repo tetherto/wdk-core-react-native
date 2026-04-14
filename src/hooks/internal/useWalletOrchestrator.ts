@@ -60,6 +60,7 @@ export interface UseWalletOrchestratorProps {
   currentUserId?: string | null
   isWorkletStarted: boolean
   isWorkletInitialized: boolean
+  isWdkReinitialized: boolean
   workletError: string | null
 }
 
@@ -68,11 +69,9 @@ export function useWalletOrchestrator ({
   currentUserId,
   isWorkletStarted,
   isWorkletInitialized,
-  workletError
-}: UseWalletOrchestratorProps): {
-    state: WdkAppState
-    retry: () => void
-  } {
+  isWdkReinitialized: isWorkletReinitialized,
+  workletError,
+}: UseWalletOrchestratorProps) {
   const walletStore = getWalletStore()
 
   const activeWalletId = walletStore(
@@ -360,7 +359,11 @@ export function useWalletOrchestrator ({
       return { status: 'READY', walletId: activeWalletId }
     }
 
-    if (isWorkletStarted && activeWalletId === null) {
+    if (isWorkletStarted && isWorkletReinitialized) {
+      return { status: 'REINITIALIZING'}
+    }
+
+    if (isWorkletStarted && !activeWalletId) {
       return { status: 'NO_WALLET' }
     }
 
@@ -374,7 +377,8 @@ export function useWalletOrchestrator ({
     walletLoadingState,
     isWorkletInitialized,
     isWorkletStarted,
-    activeWalletId
+    activeWalletId,
+    isWorkletReinitialized
   ])
 
   return {

@@ -68,6 +68,7 @@ export interface WorkletState {
   ipc: unknown | null
   isWorkletStarted: boolean
   isInitialized: boolean
+  isReinitialized: boolean
   isLoading: boolean
   error: string | null
   wdkConfigs: WdkConfigs | null
@@ -87,6 +88,7 @@ const initialState: WorkletState = {
   ipc: null,
   isWorkletStarted: false,
   isInitialized: false,
+  isReinitialized: false,
   isLoading: false,
   error: null,
   wdkConfigs: null,

@@ -204,6 +204,7 @@ export class WorkletLifecycleService {
 
       store.setState({
         isInitialized: true,
+        isReinitialized: false,
         isLoading: false,
         wdkInitResult,
         error: null,
@@ -218,6 +219,76 @@ export class WorkletLifecycleService {
           error: normalizedError.message,
           isLoading: false,
           isInitialized: false,
+          isReinitialized: false
+        }),
+      )
+    }
+  }
+  
+  static async resetWallets(blockchains: string[]) {
+    if (blockchains.length === 0) {
+      return
+    }
+
+    await WorkletLifecycleService.ensureWorkletStarted()
+    
+    const store = getWorkletStore()
+    
+    if (store.getState().isLoading) {
+      return
+    }
+
+    try {
+      const currentState = store.getState()
+      if (!currentState.hrpc) {
+        throw new Error(
+          'HRPC instance not available. Worklet may not be fully started.',
+        )
+      }
+      
+      if (!currentState.wdkConfigs || !currentState.wdkConfigs.networks) {
+        throw new Error(
+          'WDK configs not available. Worklet may not be fully initialized.',
+        )
+      }
+
+      const { wdkConfigs } = currentState
+      const targetNetworks = Object.keys(wdkConfigs.networks).filter(
+        network => blockchains.includes(network)
+      )
+      
+      if (targetNetworks.length === 0) {
+        return
+      }
+
+      store.setState({ error: null, isLoading: true, isReinitialized: true})
+
+      const filteredConfig = {
+        ...wdkConfigs,
+        networks: Object.fromEntries(
+          targetNetworks.map(network => [network, wdkConfigs.networks[network]])
+        ),
+      }
+      await currentState.hrpc.resetWdkWallets({
+        config: JSON.stringify(filteredConfig)
+      })
+      
+      store.setState({
+        isInitialized: true,
+        isReinitialized: false,
+        isLoading: false,
+        error: null,
+      })
+      store.getState().isWorkletInitializedPromise.resolve(true)
+    } catch (error) {
+      store.getState().isWorkletInitializedPromise.reject(error)
+      this.handleErrorWithStateUpdate(
+        error,
+        'resetWallets',
+        (normalizedError) => ({
+          error: normalizedError.message,
+          isLoading: false,
+          isReinitialized: false
         }),
       )
     }

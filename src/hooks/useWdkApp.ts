@@ -56,9 +56,11 @@ import { getWorkletStore } from '../store/workletStore'
 import { WorkletLifecycleService } from '../services/workletLifecycleService'
 import { log, logError } from '../utils/logger'
 import { withOperationMutex } from '../utils/operationMutex'
+import { createResolvablePromise } from '../utils/promise'
 
 export interface UseWdkAppResult extends WdkAppContextValue {
   reinitializeWdk: () => Promise<void>
+  resetWallets: (blockchains: string[]) => Promise<void>
 }
 
 /**
@@ -88,20 +90,64 @@ export function useWdkApp(): UseWdkAppResult {
         })
         return
       }
-  
-      log('[useWdkApp] Manual WDK reinitialize (initializeWDK)')
+
+      const workletStore = getWorkletStore();
+
+      log('[useWdkApp] Manually reinitialize WDK')
       try {
-        await WorkletLifecycleService.initializeWDK()
-        log('[useWdkApp] Manual WDK reinitialization done')
+        workletStore.setState({
+          isInitialized: false,
+          isReinitialized: true,
+          wdkInitResult: null,
+          isWorkletInitializedPromise: createResolvablePromise<boolean>(),
+        });
+
+        await WorkletLifecycleService.initializeWDK();
+        log('[useWdkApp] Manual WDK reinitialization done');
       } catch (e) {
-        logError('[useWdkApp] Manual WDK reinitialization failed', e)
+        logError('[useWdkApp] Manual WDK reinitialization failed', e);
+        workletStore.setState({ isLoading: false }); 
       }
     })
   }, [])
   
+  const resetWallets = useCallback(async (blockchains: string[]) => {
+    return withOperationMutex('reinitializeWdk', async () => {
+      const ws = getWorkletStore().getState()
+      if (
+        !ws.isWorkletStarted ||
+        !ws.isInitialized ||
+        ws.isLoading
+      ) {
+        log('[useWdkApp] Reset wallets skipped due to state:', {
+          isWorkletStarted: ws.isWorkletStarted,
+          isInitialized: ws.isInitialized,
+          isLoading: ws.isLoading,
+        })
+        return
+      }
+
+      const workletStore = getWorkletStore()
+
+      log('[useWdkApp] Resetting wallets for blockchains:', blockchains)
+      try {
+        workletStore.setState({
+          isWorkletInitializedPromise: createResolvablePromise<boolean>(),
+        })
+
+        await WorkletLifecycleService.resetWallets(blockchains)
+        log('[useWdkApp] Wallet reset done')
+      } catch (e) {
+        logError('[useWdkApp] Wallet reset failed', e)
+        workletStore.setState({ isLoading: false })
+      }
+    })
+  }, [])
+
   return {
     ...context,
-    reinitializeWdk
+    reinitializeWdk,
+    resetWallets,
   }
 }
 
