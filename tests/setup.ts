@@ -15,7 +15,9 @@
 /**
  * Jest setup file for test configuration
  */
-
+ 
+(global as any).__DEV__ = false;
+ 
 // Mock React Native modules
 jest.mock('react-native-mmkv', () => ({
   MMKV: jest.fn().mockImplementation(() => ({
