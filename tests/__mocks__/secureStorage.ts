@@ -103,4 +103,6 @@ export const mockSecureStorage = {
   })
 }
 
+export const createSecureStorage = () => mockSecureStorage
+
 export default mockSecureStorage
