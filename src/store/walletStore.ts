@@ -157,7 +157,7 @@ export function createWalletStore(): WalletStoreInstance {
   walletStoreInstance = create<WalletStore>()(
     devtools(
       persist(
-        (_set, _get) => ({
+        () => ({
           ...initialState,
         }),
         {

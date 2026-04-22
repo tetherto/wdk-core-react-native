@@ -75,7 +75,7 @@ import { log, logError, logWarn } from '../utils/logger'
 import { useAddressLoader } from './useAddressLoader';
 import { useMultiAddressLoader } from './useMultiAddressLoader';
 import type { BalanceFetchResult, IAsset } from '../types'
-
+import { useMemo } from 'react'
 
 /**
  * Balance query options
@@ -422,33 +422,39 @@ async function fetchBalances(
         return [...nativeResults, ...nonNativeResults];
       };
 
-      const timeout = new Promise<FetchBalancesResult[]>(resolve =>
-        setTimeout(() => {
+      let timedOut = false;
+      let timeoutId: ReturnType<typeof setTimeout>
+      const timeout = new Promise<FetchBalancesResult[]>(resolve => {
+        timeoutId = setTimeout(() => {
+          timedOut = true;
           const error = new Error(`Network ${network} timed out after ${networkTimeoutMs}ms`);
           logWarn(`[fetchBalances] ${error.message}`);
           resolve(networkAssets.map(asset => ({ success: false, asset, error })));
-        }, networkTimeoutMs),
-      );
+        }, networkTimeoutMs);
+      });
 
       const networkResults = await Promise.race([fetchNetwork(), timeout]);
+      clearTimeout(timeoutId!);
 
-      let hasSuccessfulUpdate = false;
-      for (const result of networkResults) {
-        if (!result.success) {
-          continue;
+      if (!timedOut) {
+        let hasSuccessfulUpdate = false;
+        for (const result of networkResults) {
+          if (!result.success) {
+            continue;
+          }
+          hasSuccessfulUpdate = true;
+          BalanceService.updateBalance(
+            accountIndex,
+            network,
+            result.asset.getId(),
+            result.balance,
+          );
         }
-        hasSuccessfulUpdate = true;
-        BalanceService.updateBalance(
-          accountIndex,
-          network,
-          result.asset.getId(),
-          result.balance,
-        );
-      }
 
-      if (hasSuccessfulUpdate) {
-        BalanceService.updateLastBalanceUpdate(network, accountIndex);
-        log(`[fetchBalances] Fetched balances for network ${network}:${accountIndex}`);
+        if (hasSuccessfulUpdate) {
+          BalanceService.updateLastBalanceUpdate(network, accountIndex);
+          log(`[fetchBalances] Fetched balances for network ${network}:${accountIndex}`);
+        }
       }
 
       return networkResults;
@@ -487,35 +493,6 @@ async function fetchBalances(
   });
 }
 
-async function fetchBalancesForAssets(
-  accountIndex: number,
-  assetConfigs: IAsset[],
-): Promise<BalanceFetchResult[]> {
-  const results = await Promise.allSettled(
-    assetConfigs.map(async (asset) => fetchBalance(accountIndex, asset)),
-  );
-
-  return results.map((result, index) => {
-    if (result.status === 'fulfilled') {
-      return result.value;
-    }
-    const asset = assetConfigs[index];
-    const errorMessage =
-      result.reason instanceof Error
-        ? result.reason.message
-        : String(result.reason);
-
-    return {
-      success: false,
-      network: asset?.getNetwork() || '',
-      accountIndex,
-      assetId: asset?.getId() || '',
-      balance: null,
-      error: errorMessage,
-    };
-  });
-}
-
 export type UseBalancesForWalletResult = Omit<
   UseQueryResult<BalanceFetchResult[], Error>,
   'isLoading' | 'error'
@@ -532,7 +509,10 @@ export function useBalancesForWallet(
   assetConfigs: IAsset[],
   options?: BalanceQueryOptions,
 ): UseBalancesForWalletResult {
-  const uniqueNetworks = [...new Set(assetConfigs.map((asset) => asset.getNetwork()))];
+  const uniqueNetworks = useMemo(
+    () => [...new Set(assetConfigs.map((asset) => asset.getNetwork()))],
+    [assetConfigs],
+  );
 
   const {
     isLoading: areAddressesLoading,

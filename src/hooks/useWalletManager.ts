@@ -163,6 +163,44 @@ export function useWalletManager(): UseWalletManagerResult {
     walletStore.setState({ activeWalletId: walletId })
   }, [])
 
+  /**
+   * Clear active wallet ID
+   * Useful when switching users or logging out to prevent auto-initialization with wrong wallet
+   */
+  const lock = useCallback(() => {
+    if (walletStore.getState().activeWalletId) {
+      WorkletLifecycleService.reset()
+      walletStore.setState({
+        activeWalletId: null,
+        walletLoadingState: { type: 'not_loaded' },
+      })
+      log('[useWalletManager] Locked wallet and cleared active wallet ID')
+    }
+  }, [walletStore])
+
+  const clearTemporaryWallet = useCallback(() => {
+    const { tempWalletId, activeWalletId } = walletStore.getState()
+
+    if (!tempWalletId) {
+      return
+    }
+
+    if (activeWalletId === tempWalletId) {
+      lock()
+    }
+
+    walletStore.setState(
+      produce((state: WalletState) => {
+        state.walletList = state.walletList.filter(
+          (w) => w.identifier !== tempWalletId,
+        )
+        state.tempWalletId = null
+      }),
+    )
+
+    log('[useWalletManager] Cleared temporary wallet session')
+  }, [lock, walletStore])
+
   const unlock = useCallback(
     (walletId?: string) =>
       withOperationMutex('unlock', async () => {
@@ -218,7 +256,7 @@ export function useWalletManager(): UseWalletManagerResult {
           throw err
         }
       }),
-    [walletStore],
+    [walletStore, clearTemporaryWallet],
   )
 
   const checkWallet = useCallback(
@@ -315,7 +353,7 @@ export function useWalletManager(): UseWalletManagerResult {
         throw err
       }
     },
-    [refreshWalletList, walletStore],
+    [refreshWalletList, walletStore, clearTemporaryWallet],
   )
 
   const deleteWallet = useCallback(
@@ -481,21 +519,6 @@ export function useWalletManager(): UseWalletManagerResult {
     [],
   )
 
-  /**
-   * Clear active wallet ID
-   * Useful when switching users or logging out to prevent auto-initialization with wrong wallet
-   */
-  const lock = useCallback(() => {
-    if (walletStore.getState().activeWalletId) {
-      WorkletLifecycleService.reset()
-      walletStore.setState({
-        activeWalletId: null,
-        walletLoadingState: { type: 'not_loaded' },
-      })
-      log('[useWalletManager] Locked wallet and cleared active wallet ID')
-    }
-  }, [walletStore])
-
   const generateMnemonic = useCallback(
     async (wordCount: 12 | 24 = 12): Promise<string> => {
       const { encryptedEntropyBuffer, encryptionKey } =
@@ -511,28 +534,6 @@ export function useWalletManager(): UseWalletManagerResult {
     [generateEntropyAndEncrypt, getMnemonicFromEntropy],
   )
   
-  const clearTemporaryWallet = useCallback(() => {
-    const { tempWalletId, activeWalletId } = walletStore.getState()
-
-    if (!tempWalletId) {
-      return
-    }
-
-    if (activeWalletId === tempWalletId) {
-      lock()
-    }
-
-    walletStore.setState(
-      produce((state: WalletState) => {
-        state.walletList = state.walletList.filter(
-          (w) => w.identifier !== tempWalletId,
-        )
-        state.tempWalletId = null
-      }),
-    )
-
-    log('[useWalletManager] Cleared temporary wallet session')
-  }, [lock, walletStore])
 
   const createTemporaryWallet = useCallback(
     async (walletId: string, mnemonic?: string): Promise<string> => {
@@ -657,7 +658,7 @@ export function useWalletManager(): UseWalletManagerResult {
         throw err
       }
     },
-    [checkWallet, walletStore],
+    [checkWallet, walletStore, clearTemporaryWallet],
   )
 
   const clearCache = useCallback(() => {

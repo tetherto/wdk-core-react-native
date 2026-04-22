@@ -22,8 +22,8 @@
  * Structure of a single method definition
  */
 export interface MethodDef {
-  params: any[]
-  result: any
+  params: unknown[]
+  result: unknown
 }
 
 /**
@@ -50,6 +50,10 @@ export interface DefaultAccountMethods extends MethodMap {
   }
   getTokenBalance: {
     params: [tokenAddress: string]
+    result: string
+  }
+  getAddress: {
+    params: []
     result: string
   }
   getTokenBalances: {

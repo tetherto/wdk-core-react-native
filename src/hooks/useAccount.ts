@@ -97,7 +97,7 @@ export interface UseAccountReturn<T extends object> {
   extension: () => T
 }
 
-export function useAccount<T extends object = {}>(
+export function useAccount<T extends object>(
   accountParams: UseAccountParams,
 ): UseAccountReturn<T> {
   const { address, isLoading, error: addressLoaderError } = useAddressLoader(accountParams)

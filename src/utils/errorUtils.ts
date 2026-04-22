@@ -176,6 +176,7 @@ function applySensitivePatternSanitization(message: string): string {
 export function sanitizeErrorMessage(
   message: string,
   isDevelopment = false,
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   context?: { operation?: string; component?: string }
 ): string {
   if (isDevelopment) {

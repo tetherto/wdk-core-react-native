@@ -19,6 +19,7 @@ import {
   isWalletErrorState,
   isWalletLoadingState,
   updateWalletLoadingState,
+  WalletLoadingState,
   type WalletStore,
 } from '../../store/walletStore'
 import { WalletSetupService } from '../../services/walletSetupService'
@@ -32,20 +33,27 @@ import { log, logError } from '../../utils/logger'
 import type { WdkAppState } from '../../provider/WdkAppProvider'
 
 // Custom deep equality for walletLoadingState comparison
-const deepEqualityFn = (a: any, b: any) => {
+const deepEqualityFn = (a: WalletLoadingState, b: WalletLoadingState): boolean => {
   if (a === b) return true
-  if (!a || !b) return false
-  if (typeof a !== 'object' || typeof b !== 'object') return a === b
 
-  const keysA = Object.keys(a)
-  const keysB = Object.keys(b)
-  if (keysA.length !== keysB.length) return false
+  if (a.type !== b.type) return false
 
-  for (const key of keysA) {
-    if (!keysB.includes(key)) return false
-    if (a[key] !== b[key]) return false
+  switch (a.type) {
+    case 'not_loaded':
+      return true
+    case 'checking':
+      return a.identifier === (b as typeof a).identifier
+    case 'loading':
+      return a.identifier === (b as typeof a).identifier &&
+             a.walletExists === (b as typeof a).walletExists
+    case 'ready':
+      return a.identifier === (b as typeof a).identifier
+    case 'error':
+      return a.identifier === (b as typeof a).identifier &&
+             a.error?.message === (b as typeof a).error?.message
+    default:
+      return false
   }
-  return true
 }
 
 export interface UseWalletOrchestratorProps {
@@ -322,6 +330,7 @@ export function useWalletOrchestrator({
     isWorkletInitialized,
     createWallet,
     unlock,
+    walletStore
   ])
 
   const retry = useCallback(() => {

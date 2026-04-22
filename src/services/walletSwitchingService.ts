@@ -61,8 +61,7 @@ export class WalletSwitchingService {
    * ```
    */
   static async switchToWallet(
-    walletId: string,
-    options?: { autoStartWorklet?: boolean },
+    walletId: string
   ): Promise<void> {
     return withOperationMutex(`switchToWallet:${walletId}`, async () => {
       const walletStore = getWalletStore()

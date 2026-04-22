@@ -222,10 +222,11 @@ export function createMMKVStorageAdapter(accountIdentifier?: string): StorageAda
     for (const op of operations) {
       try {
         switch (op.type) {
-          case 'get':
+          case 'get': {
             const value = storage.getString(op.key)
             op.resolve(value ?? null)
             break
+          }
           case 'set':
             if (op.value !== undefined) {
               storage.set(op.key, op.value)
@@ -309,6 +310,7 @@ export function createMMKVStorageAdapter(accountIdentifier?: string): StorageAda
   ensureStorage().catch((error) => {
     // Error is stored in initError and will be thrown on next access
     // This prevents unhandled promise rejections
+    logWarn('[MMKVStorage] Failed to ensure storage', error)
   })
   
   const adapter: StorageAdapter = {
@@ -320,6 +322,7 @@ export function createMMKVStorageAdapter(accountIdentifier?: string): StorageAda
           return value ?? null
         } catch (error) {
           // If read fails, return null (Zustand will handle gracefully)
+          logWarn('[MMKVStorageAdapter] Failed to get item:', error)
           return null
         }
       }
@@ -358,6 +361,7 @@ export function createMMKVStorageAdapter(accountIdentifier?: string): StorageAda
         } catch (error) {
           // If write fails, queue it to retry later
           // This handles edge cases where storage becomes unavailable
+          logWarn('[MMKVStorageAdapter] Failed to set item:', error)
         }
       }
       
@@ -380,6 +384,7 @@ export function createMMKVStorageAdapter(accountIdentifier?: string): StorageAda
       ensureStorage().catch((error) => {
         // Error is stored and will be thrown when processing pending operations
         // This ensures queued operations fail appropriately
+        logWarn('[MMKVStorage] Failed to ensure storage', error)
       })
     },
     removeItem: (name: string): void => {
@@ -390,6 +395,7 @@ export function createMMKVStorageAdapter(accountIdentifier?: string): StorageAda
           return
         } catch (error) {
           // If delete fails, queue it to retry later
+          logWarn('[MMKVStorageAdapter] Failed to remove item:', name, error)
         }
       }
       
@@ -409,6 +415,7 @@ export function createMMKVStorageAdapter(accountIdentifier?: string): StorageAda
       // Ensure storage is initializing
       ensureStorage().catch((error) => {
         // Error is stored and will be thrown when processing pending operations
+        logWarn('[MMKVStorage] Failed to ensure storage', error)
       })
     },
   }

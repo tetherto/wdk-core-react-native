@@ -192,14 +192,6 @@ function validateAccountIdentifier(accountIdentifier: AccountIdentifier): void {
   if (trimmed.length > MAX_ACCOUNT_IDENTIFIER_LENGTH) {
     throw new Error(`Account identifier exceeds maximum length of ${MAX_ACCOUNT_IDENTIFIER_LENGTH} characters`)
   }
-
-  // Check for valid UTF-8 encoding (basic check)
-  try {
-    // Ensure the string can be properly encoded
-    encodeURIComponent(trimmed)
-  } catch (error) {
-    throw new Error('Account identifier contains invalid characters')
-  }
 }
 
 /**

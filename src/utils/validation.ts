@@ -179,6 +179,8 @@ export function validateWalletParams(
 ): void {
   validateNetworkName(network)
   validateAccountIndex(accountIndex)
-  assetId && validateAssetId(assetId)
+  if (assetId) {
+    validateAssetId(assetId)
+  } 
 }
 

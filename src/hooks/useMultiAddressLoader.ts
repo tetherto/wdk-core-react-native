@@ -55,9 +55,9 @@ export function useMultiAddressLoader({
   useEffect(() => {
     const loadAddresses = async () => {
       if (!enabled || networks.length === 0 || !activeWalletId) {
-        if (isLoading) setIsLoading(false);
-        if (error) setError(null);
-        if (addresses) setAddresses(null);
+        setIsLoading(false);
+        setError(null);
+        setAddresses(null);
         return;
       }
 
@@ -71,16 +71,15 @@ export function useMultiAddressLoader({
           AccountService.callAccountMethod<'getAddress'>(
             network,
             accountIndex,
-            'getAddress',
+            'getAddress'
           ),
         );
 
         const loadedAddresses = await Promise.all(addressPromises);
 
-        // Create a map for efficient lookups.
         const addressMap = new Map<string, string>();
         uniqueNetworks.forEach((network, index) => {
-          addressMap.set(network, loadedAddresses[index]);
+          addressMap.set(network, loadedAddresses[index] as string);
         });
 
         const finalAddresses = networks.map((network) => ({
@@ -99,7 +98,7 @@ export function useMultiAddressLoader({
     };
 
     loadAddresses();
-  }, [networksKey, accountIndex, enabled, activeWalletId]);
+  }, [networksKey, accountIndex, enabled, activeWalletId, networks]);
 
   return { addresses, isLoading, error };
 }
