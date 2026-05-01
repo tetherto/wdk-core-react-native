@@ -171,169 +171,6 @@ function isQueryEnabled(
   return enabledOption !== false && isInitialized && additionalCondition
 }
 
-/**
- * Fetch balance for a specific asset
- *
- * @param accountIndex - Account index
- * @param asset - Asset entity (contains ID and contract details)
- * @param walletId - Optional wallet identifier (defaults to activeWalletId)
- * @returns Promise with balance fetch result
- */
-async function fetchBalance(
-  accountIndex: number,
-  asset: IAsset,
-): Promise<BalanceFetchResult> {
-  const assetId = asset.getId()
-  const network = asset.getNetwork()
-
-  try {
-    let balanceResult: string
-
-    if (asset.isNative()) {
-      balanceResult = await AccountService.callAccountMethod<'getBalance'>(
-        network,
-        accountIndex,
-        'getBalance',
-      )
-    } else {
-      const tokenAddress = asset.getContractAddress()
-
-      if (!tokenAddress) {
-        throw new Error('Token address cannot be null')
-      }
-
-      balanceResult = await AccountService.callAccountMethod<'getTokenBalance'>(
-        network,
-        accountIndex,
-        'getTokenBalance',
-        tokenAddress,
-      )
-    }
-
-    const balance = convertBalanceToString(balanceResult)
-
-    BalanceService.updateBalance(
-      accountIndex,
-      network,
-      assetId,
-      balance,
-    )
-    BalanceService.updateLastBalanceUpdate(network, accountIndex)
-
-    return {
-      success: true,
-      network,
-      accountIndex,
-      assetId,
-      balance,
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logError(
-      `Failed to fetch balance for ${network}:${accountIndex}:${assetId}:`,
-      error,
-    )
-
-    return {
-      success: false,
-      network,
-      accountIndex,
-      assetId,
-      balance: null,
-      error: errorMessage,
-    }
-  }
-}
-
-/**
- * The result of the useBalance hook, which combines the result of the TanStack Query
- * with additional loading and error states from address loading.
- */
-export type UseBalanceResult = Omit<
-  UseQueryResult<BalanceFetchResult | undefined, Error>,
-  'isLoading' | 'error'
-> & {
-  isLoading: boolean
-  error: Error | null
-}
-
-/**
- * Hook to fetch a single balance.
- *
- * This hook ensures that the account's address is loaded before attempting to fetch the balance,
- * providing a consistent and predictable loading sequence.
- *
- * @param accountIndex - Account index
- * @param asset - Asset entity (must implement IAsset)
- * @param options - Query options (enabled, refetchInterval, etc.)
- * @returns A composite TanStack Query result including address loading status.
- *
- * @example
- * ```tsx
- * const usdt = new MyAsset({ id: 'usdt', ... })
- * const { data: balanceResult, isLoading, error } = useBalance('ethereum', 0, usdt)
- *
- * if (isLoading) return <Spinner />
- * if (error) return <p>{error.message}</p>
- * if (balanceResult?.success) {
- *   return <Text>Balance: {balanceResult.balance}</Text>
- * }
- * ```
- */
-export function useBalance(
-  accountIndex: number,
-  asset: IAsset,
-  options?: BalanceQueryOptions,
-): UseBalanceResult {
-  const network = asset.getNetwork()
-  const assetId = asset.getId()
-
-  const {
-    address,
-    isLoading: isAddressLoading,
-    error: addressError,
-  } = useAddressLoader({ network, accountIndex })
-
-  const activeWalletId = getWalletStore()((state) => state.activeWalletId)
-
-  let initialBalance: string | null = null
-  let initialData: BalanceFetchResult | undefined = undefined
-  
-  if (activeWalletId) {
-    initialBalance = BalanceService.getBalance(accountIndex, network, assetId, activeWalletId)
-    initialData = {
-      success: true,
-      network,
-      accountIndex,
-      assetId,
-      balance: initialBalance,
-    }
-  }
-
-  const query = useQuery({
-    queryKey: balanceQueryKeys.byToken(
-      activeWalletId || '',
-      accountIndex,
-      network,
-      assetId,
-    ),
-    queryFn: () => fetchBalance(accountIndex, asset),
-    enabled: isQueryEnabled(
-      options?.enabled,
-      !!activeWalletId && !!address,
-    ),
-    refetchInterval: options?.refetchInterval,
-    staleTime: options?.staleTime ?? DEFAULT_QUERY_STALE_TIME_MS,
-    gcTime: DEFAULT_QUERY_GC_TIME_MS,
-    initialData,
-  })
-
-  const isLoading = isAddressLoading || (query.isLoading && !!address)
-  const error = addressError || query.error
-
-  return { ...query, isLoading, error }
-}
-
 type FetchBalancesResult =
   | { success: true; asset: IAsset; balance: string }
   | { success: false; asset: IAsset; error: unknown };
@@ -545,6 +382,133 @@ async function fetchBalances(
       error: errorMessage,
     };
   });
+}
+
+/**
+ * Fetch balance for a specific asset
+ *
+ * @param accountIndex - Account index
+ * @param asset - Asset entity (contains ID and contract details)
+ * @param walletId - Optional wallet identifier (defaults to activeWalletId)
+ * @returns Promise with balance fetch result
+ */
+async function fetchBalance(accountIndex: number, asset: IAsset): Promise<BalanceFetchResult> {
+  const results = await fetchBalancesForNetwork(accountIndex, [asset]);
+  const result = results[0]!;
+
+  if (result.success) {
+    BalanceService.updateBalance(accountIndex, result.asset.getNetwork(), result.asset.getId(), result.balance);
+    BalanceService.updateLastBalanceUpdate(result.asset.getNetwork(), accountIndex);
+
+    return {
+      success: true,
+      network: result.asset.getNetwork(),
+      accountIndex,
+      assetId: result.asset.getId(),
+      balance: result.balance,
+    };
+  }
+
+  const errorMessage = result.error instanceof Error ? result.error.message : String(result.error);
+  logError(`Failed to fetch balance for ${result.asset.getNetwork()}:${accountIndex}:${result.asset.getId()}:`, result.error);
+
+  return {
+    success: false,
+    network: result.asset.getNetwork(),
+    accountIndex,
+    assetId: result.asset.getId(),
+    balance: null,
+    error: errorMessage,
+  };
+}
+
+/**
+ * The result of the useBalance hook, which combines the result of the TanStack Query
+ * with additional loading and error states from address loading.
+ */
+export type UseBalanceResult = Omit<
+  UseQueryResult<BalanceFetchResult | undefined, Error>,
+  'isLoading' | 'error'
+> & {
+  isLoading: boolean
+  error: Error | null
+}
+
+/**
+ * Hook to fetch a single balance.
+ *
+ * This hook ensures that the account's address is loaded before attempting to fetch the balance,
+ * providing a consistent and predictable loading sequence.
+ *
+ * @param accountIndex - Account index
+ * @param asset - Asset entity (must implement IAsset)
+ * @param options - Query options (enabled, refetchInterval, etc.)
+ * @returns A composite TanStack Query result including address loading status.
+ *
+ * @example
+ * ```tsx
+ * const usdt = new MyAsset({ id: 'usdt', ... })
+ * const { data: balanceResult, isLoading, error } = useBalance('ethereum', 0, usdt)
+ *
+ * if (isLoading) return <Spinner />
+ * if (error) return <p>{error.message}</p>
+ * if (balanceResult?.success) {
+ *   return <Text>Balance: {balanceResult.balance}</Text>
+ * }
+ * ```
+ */
+export function useBalance(
+  accountIndex: number,
+  asset: IAsset,
+  options?: BalanceQueryOptions,
+): UseBalanceResult {
+  const network = asset.getNetwork()
+  const assetId = asset.getId()
+
+  const {
+    address,
+    isLoading: isAddressLoading,
+    error: addressError,
+  } = useAddressLoader({ network, accountIndex })
+
+  const activeWalletId = getWalletStore()((state) => state.activeWalletId)
+
+  let initialBalance: string | null = null
+  let initialData: BalanceFetchResult | undefined = undefined
+  
+  if (activeWalletId) {
+    initialBalance = BalanceService.getBalance(accountIndex, network, assetId, activeWalletId)
+    initialData = {
+      success: true,
+      network,
+      accountIndex,
+      assetId,
+      balance: initialBalance,
+    }
+  }
+
+  const query = useQuery({
+    queryKey: balanceQueryKeys.byToken(
+      activeWalletId || '',
+      accountIndex,
+      network,
+      assetId,
+    ),
+    queryFn: () => fetchBalance(accountIndex, asset),
+    enabled: isQueryEnabled(
+      options?.enabled,
+      !!activeWalletId && !!address,
+    ),
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime ?? DEFAULT_QUERY_STALE_TIME_MS,
+    gcTime: DEFAULT_QUERY_GC_TIME_MS,
+    initialData,
+  })
+
+  const isLoading = isAddressLoading || (query.isLoading && !!address)
+  const error = addressError || query.error
+
+  return { ...query, isLoading, error }
 }
 
 export type UseBalancesForWalletResult = Omit<
