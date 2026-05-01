@@ -338,6 +338,125 @@ type FetchBalancesResult =
   | { success: true; asset: IAsset; balance: string }
   | { success: false; asset: IAsset; error: unknown };
 
+const BATCH_NOT_SUPPORTED = 'Batch balance fetching is not supported';
+
+async function fetchNonNativeBalancesInBatch(network: string, accountIndex: number, nonNativeAssets: IAsset[]): Promise<FetchBalancesResult[]> {
+  try {
+    const tokenAddresses = nonNativeAssets
+      .filter((asset) => asset.getContractAddress() !== null)
+      .map((asset) => {
+        return asset.getContractAddress()!;
+      });
+  
+    const balanceMap = await AccountService.callAccountMethod(
+      network,
+      accountIndex,
+      'getTokenBalances',
+      tokenAddresses,
+    );
+  
+    return nonNativeAssets.map((asset) => {
+      const address = asset.getContractAddress();
+      if (!address) {
+        return { success: false, asset, error: new Error(`Token ${asset.getId()} has no address`)}
+      }
+  
+      const balance = (balanceMap as Record<string, string>)[address];
+      if (balance === undefined) {
+        return { success: false, asset, error: new Error('Balance not in map') };
+      }
+  
+      return { success: true, asset, balance: convertBalanceToString(balance) };
+    });
+  } catch (error) {
+    if ((error as Error).message.includes('not found on account for network')) {
+      return nonNativeAssets.map((asset) => ({ success: false, asset, error: new Error(BATCH_NOT_SUPPORTED) }));
+    }
+
+    return nonNativeAssets.map((asset) => ({ success: false, asset, error }));
+  }
+}
+
+async function fetchNonNativeBalances(network: string, accountIndex: number, nonNativeAssets: IAsset[]): Promise<FetchBalancesResult[]> {
+  return await Promise.all(
+    nonNativeAssets.map(async (asset) => {
+      const address = asset.getContractAddress();
+      if (!address) {
+        return { success: false, asset, error: Error(`Token ${asset.getId()} has no address`) };
+      }
+
+      try {
+        const balanceResult = await AccountService.callAccountMethod(
+          network,
+          accountIndex,
+          "getTokenBalance",
+          address,
+        );
+  
+        const balance = convertBalanceToString(balanceResult);
+        return { success: true, asset, balance };
+      } catch (error) {
+        return { success: false, asset, error };
+      }
+    })
+  );
+}
+
+async function fetchBalancesForNetwork(accountIndex: number, networkAssets: IAsset[]): Promise<FetchBalancesResult[]> {
+  if (networkAssets.length === 0) {
+    return [];
+  }
+
+  const uniqueNetworks = new Set(networkAssets.map(asset => asset.getNetwork()));
+  if (uniqueNetworks.size !== 1) {
+    throw new Error('Asset group must belong to only one network.');
+  }
+
+  const network = networkAssets[0]!.getNetwork();
+  const nativeAssets = networkAssets.filter((asset) => asset.isNative());
+  const nonNativeAssets = networkAssets.filter((asset) => !asset.isNative());
+
+  const nativePromises: Promise<FetchBalancesResult>[] = nativeAssets.map(
+    (asset) =>
+      (async () => {
+        try {
+          const balanceResult = await AccountService.callAccountMethod(
+            network,
+            accountIndex,
+            "getBalance",
+          );
+          const balance = convertBalanceToString(balanceResult);
+          return { success: true, asset, balance } as FetchBalancesResult;
+        } catch (error) {
+          return { success: false, asset, error } as FetchBalancesResult;
+        }
+      })(),
+  );
+
+  const nonNativePromise: Promise<FetchBalancesResult[]> = (async () => {
+    if (nonNativeAssets.length === 0) {
+      return [];
+    }
+
+    const balances = await fetchNonNativeBalancesInBatch(network, accountIndex, nonNativeAssets);
+
+    if (balances.length > 0) {
+      const firstBalance = balances[0]!;
+      if (firstBalance.success === false && (firstBalance.error as Error).message.includes(BATCH_NOT_SUPPORTED)) {
+        return await fetchNonNativeBalances(network, accountIndex, nonNativeAssets);
+      }
+    }
+
+    return balances;
+  })();
+
+  const [nativeResults, nonNativeResults] = await Promise.all([
+    Promise.all(nativePromises),
+    nonNativePromise,
+  ]);
+  return [...nativeResults, ...nonNativeResults];
+}
+
 async function fetchBalances(
   accountIndex: number,
   assets: IAsset[],
@@ -354,74 +473,6 @@ async function fetchBalances(
 
   const allNetworkPromises = Array.from(assetsByNetwork.entries()).map(
     async ([network, networkAssets]) => {
-      const fetchNetwork = async (): Promise<FetchBalancesResult[]> => {
-        const nativeAssets = networkAssets.filter(asset => asset.isNative());
-        const nonNativeAssets = networkAssets.filter(asset => !asset.isNative());
-
-        const nativePromises: Promise<FetchBalancesResult>[] = nativeAssets.map(asset =>
-          (async () => {
-            try {
-              const balanceResult = await AccountService.callAccountMethod(
-                network,
-                accountIndex,
-                'getBalance',
-              );
-              const balance = convertBalanceToString(balanceResult);
-              return { success: true, asset, balance } as FetchBalancesResult;
-            } catch (error) {
-              return { success: false, asset, error } as FetchBalancesResult;
-            }
-          })(),
-        );
-
-        const nonNativePromise: Promise<FetchBalancesResult[]> = (async () => {
-          if (nonNativeAssets.length === 0) {
-            return [];
-          }
-
-          try {
-            const tokenAddresses = nonNativeAssets.map(asset => {
-              const address = asset.getContractAddress();
-              if (!address) {
-                throw new Error(`Token ${asset.getId()} has no address`);
-              }
-              return address;
-            });
-            const balanceMap = await AccountService.callAccountMethod(
-              network,
-              accountIndex,
-              'getTokenBalances',
-              tokenAddresses,
-            );
-
-            return nonNativeAssets.map(asset => {
-              const address = asset.getContractAddress()!;
-              const balance = (balanceMap as Record<string, string>)[address];
-              if (balance === undefined) {
-                return {
-                  success: false,
-                  asset,
-                  error: new Error('Balance not in map'),
-                };
-              }
-              return {
-                success: true,
-                asset,
-                balance: convertBalanceToString(balance),
-              };
-            });
-          } catch (error) {
-            return nonNativeAssets.map(asset => ({ success: false, asset, error }));
-          }
-        })();
-
-        const [nativeResults, nonNativeResults] = await Promise.all([
-          Promise.all(nativePromises),
-          nonNativePromise,
-        ]);
-        return [...nativeResults, ...nonNativeResults];
-      };
-
       let timedOut = false;
       let timeoutId: ReturnType<typeof setTimeout>
       const timeout = new Promise<FetchBalancesResult[]>(resolve => {
@@ -433,7 +484,10 @@ async function fetchBalances(
         }, networkTimeoutMs);
       });
 
-      const networkResults = await Promise.race([fetchNetwork(), timeout]);
+      const networkResults = await Promise.race([
+        fetchBalancesForNetwork(accountIndex, networkAssets),
+        timeout
+      ]);
       clearTimeout(timeoutId!);
 
       if (!timedOut) {
