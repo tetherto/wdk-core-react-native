@@ -98,7 +98,8 @@ export function useMultiAddressLoader({
     };
 
     loadAddresses();
-  }, [networksKey, accountIndex, enabled, activeWalletId, networks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [networksKey, accountIndex, enabled, activeWalletId]);
 
   return { addresses, isLoading, error };
 }
