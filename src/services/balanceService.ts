@@ -49,10 +49,10 @@ import { produce } from 'immer'
 import { getWalletStore } from '../store/walletStore'
 import { resolveWalletId, updateBalanceInState, getNestedState } from '../utils/storeHelpers'
 import { validateBalance, validateWalletParams } from '../utils/validation'
-import { BalanceFetchResult, IAsset } from 'src/types'
+import { BalanceFetchResult, IAsset } from '../types'
 import { AccountService } from './accountService'
-import { convertBalanceToString } from 'src/utils/balanceUtils'
-import { log, logError, logWarn } from 'src/utils/logger'
+import { convertBalanceToString } from '../utils/balanceUtils'
+import { log, logError, logWarn } from '../utils/logger'
 
 /**
  * Balance Service
