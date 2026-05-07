@@ -26,7 +26,6 @@ import {
   accountIndexSchema,
   networkNameSchema,
   balanceStringSchema,
-  ethereumAddressSchema,
   assetIdSchema,
 } from './schemas'
 import type { WdkConfigs } from '../types'
@@ -125,21 +124,6 @@ export function validateNetworkName(network: string): void {
       throw new Error('network must be a non-empty string containing only alphanumeric characters, hyphens, and underscores')
     }
     throw new Error(`Invalid network name: ${message}`)
-  }
-}
-
-/**
- * Validate token address (can be null for native tokens)
- */
-export function validateTokenAddress(tokenAddress: string | null): void {
-  if (tokenAddress === null) {
-    return
-  }
-  try {
-    ethereumAddressSchema.parse(tokenAddress)
-  } catch (error) {
-    const message = getZodErrorMessage(error)
-    throw new Error(`Invalid tokenAddress: ${message}`)
   }
 }
 

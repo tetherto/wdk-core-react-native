@@ -61,17 +61,14 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query'
 
-import { AccountService } from '../services/accountService'
-import { BalanceService } from '../services/balanceService'
+import { BalanceService, fetchBalance, fetchBalances } from '../services/balanceService'
 import { getWalletStore } from '../store/walletStore'
 import { resolveWalletId } from '../utils/storeHelpers'
-import { convertBalanceToString } from '../utils/balanceUtils'
 import {
   DEFAULT_QUERY_STALE_TIME_MS,
   DEFAULT_QUERY_GC_TIME_MS,
   QUERY_KEY_TAGS,
 } from '../utils/constants'
-import { log, logError, logWarn } from '../utils/logger'
 import { useAddressLoader } from './useAddressLoader';
 import { useMultiAddressLoader } from './useMultiAddressLoader';
 import type { BalanceFetchResult, IAsset } from '../types'
@@ -172,80 +169,6 @@ function isQueryEnabled(
 }
 
 /**
- * Fetch balance for a specific asset
- *
- * @param accountIndex - Account index
- * @param asset - Asset entity (contains ID and contract details)
- * @param walletId - Optional wallet identifier (defaults to activeWalletId)
- * @returns Promise with balance fetch result
- */
-async function fetchBalance(
-  accountIndex: number,
-  asset: IAsset,
-): Promise<BalanceFetchResult> {
-  const assetId = asset.getId()
-  const network = asset.getNetwork()
-
-  try {
-    let balanceResult: string
-
-    if (asset.isNative()) {
-      balanceResult = await AccountService.callAccountMethod<'getBalance'>(
-        network,
-        accountIndex,
-        'getBalance',
-      )
-    } else {
-      const tokenAddress = asset.getContractAddress()
-
-      if (!tokenAddress) {
-        throw new Error('Token address cannot be null')
-      }
-
-      balanceResult = await AccountService.callAccountMethod<'getTokenBalance'>(
-        network,
-        accountIndex,
-        'getTokenBalance',
-        tokenAddress,
-      )
-    }
-
-    const balance = convertBalanceToString(balanceResult)
-
-    BalanceService.updateBalance(
-      accountIndex,
-      network,
-      assetId,
-      balance,
-    )
-    BalanceService.updateLastBalanceUpdate(network, accountIndex)
-
-    return {
-      success: true,
-      network,
-      accountIndex,
-      assetId,
-      balance,
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logError(
-      `Failed to fetch balance for ${network}:${accountIndex}:${assetId}:`,
-      error,
-    )
-
-    return {
-      success: false,
-      network,
-      accountIndex,
-      assetId,
-      balance: null,
-      error: errorMessage,
-    }
-  }
-}
-
-/**
  * The result of the useBalance hook, which combines the result of the TanStack Query
  * with additional loading and error states from address loading.
  */
@@ -332,165 +255,6 @@ export function useBalance(
   const error = addressError || query.error
 
   return { ...query, isLoading, error }
-}
-
-type FetchBalancesResult =
-  | { success: true; asset: IAsset; balance: string }
-  | { success: false; asset: IAsset; error: unknown };
-
-async function fetchBalances(
-  accountIndex: number,
-  assets: IAsset[],
-  networkTimeoutMs: number = 15_000,
-): Promise<BalanceFetchResult[]> {
-  const assetsByNetwork = new Map<string, IAsset[]>();
-  assets.forEach(asset => {
-    const network = asset.getNetwork();
-    if (!assetsByNetwork.has(network)) {
-      assetsByNetwork.set(network, []);
-    }
-    assetsByNetwork.get(network)!.push(asset);
-  });
-
-  const allNetworkPromises = Array.from(assetsByNetwork.entries()).map(
-    async ([network, networkAssets]) => {
-      const fetchNetwork = async (): Promise<FetchBalancesResult[]> => {
-        const nativeAssets = networkAssets.filter(asset => asset.isNative());
-        const nonNativeAssets = networkAssets.filter(asset => !asset.isNative());
-
-        const nativePromises: Promise<FetchBalancesResult>[] = nativeAssets.map(asset =>
-          (async () => {
-            try {
-              const balanceResult = await AccountService.callAccountMethod(
-                network,
-                accountIndex,
-                'getBalance',
-              );
-              const balance = convertBalanceToString(balanceResult);
-              return { success: true, asset, balance } as FetchBalancesResult;
-            } catch (error) {
-              return { success: false, asset, error } as FetchBalancesResult;
-            }
-          })(),
-        );
-
-        const nonNativePromise: Promise<FetchBalancesResult[]> = (async () => {
-          if (nonNativeAssets.length === 0) {
-            return [];
-          }
-
-          try {
-            const tokenAddresses = nonNativeAssets.map(asset => {
-              const address = asset.getContractAddress();
-              if (!address) {
-                throw new Error(`Token ${asset.getId()} has no address`);
-              }
-              return address;
-            });
-            const balanceMap = await AccountService.callAccountMethod(
-              network,
-              accountIndex,
-              'getTokenBalances',
-              tokenAddresses,
-            );
-
-            return nonNativeAssets.map(asset => {
-              const address = asset.getContractAddress()!;
-              const balance = (balanceMap as Record<string, string>)[address];
-              if (balance === undefined) {
-                return {
-                  success: false,
-                  asset,
-                  error: new Error('Balance not in map'),
-                };
-              }
-              return {
-                success: true,
-                asset,
-                balance: convertBalanceToString(balance),
-              };
-            });
-          } catch (error) {
-            return nonNativeAssets.map(asset => ({ success: false, asset, error }));
-          }
-        })();
-
-        const [nativeResults, nonNativeResults] = await Promise.all([
-          Promise.all(nativePromises),
-          nonNativePromise,
-        ]);
-        return [...nativeResults, ...nonNativeResults];
-      };
-
-      let timedOut = false;
-      let timeoutId: ReturnType<typeof setTimeout>
-      const timeout = new Promise<FetchBalancesResult[]>(resolve => {
-        timeoutId = setTimeout(() => {
-          timedOut = true;
-          const error = new Error(`Network ${network} timed out after ${networkTimeoutMs}ms`);
-          logWarn(`[fetchBalances] ${error.message}`);
-          resolve(networkAssets.map(asset => ({ success: false, asset, error })));
-        }, networkTimeoutMs);
-      });
-
-      const networkResults = await Promise.race([fetchNetwork(), timeout]);
-      clearTimeout(timeoutId!);
-
-      if (!timedOut) {
-        let hasSuccessfulUpdate = false;
-        for (const result of networkResults) {
-          if (!result.success) {
-            continue;
-          }
-          hasSuccessfulUpdate = true;
-          BalanceService.updateBalance(
-            accountIndex,
-            network,
-            result.asset.getId(),
-            result.balance,
-          );
-        }
-
-        if (hasSuccessfulUpdate) {
-          BalanceService.updateLastBalanceUpdate(network, accountIndex);
-          log(`[fetchBalances] Fetched balances for network ${network}:${accountIndex}`);
-        }
-      }
-
-      return networkResults;
-    },
-  );
-
-  const allResults = (await Promise.all(allNetworkPromises)).flat();
-
-  return allResults.map(result => {
-    const { asset } = result;
-    const network = asset.getNetwork();
-    const assetId = asset.getId();
-    if (result.success) {
-      return {
-        success: true,
-        network,
-        accountIndex,
-        assetId,
-        balance: result.balance,
-      };
-    }
-    const errorMessage =
-      result.error instanceof Error ? result.error.message : String(result.error);
-    logError(
-      `Failed to fetch balance for ${network}:${accountIndex}:${assetId}:`,
-      result.error,
-    );
-    return {
-      success: false,
-      network,
-      accountIndex,
-      assetId,
-      balance: null,
-      error: errorMessage,
-    };
-  });
 }
 
 export type UseBalancesForWalletResult = Omit<

@@ -28,7 +28,6 @@ import {
   resolveWalletId,
   updateAddressInState,
 } from '../utils/storeHelpers'
-import { isValidAddress } from '../utils/typeGuards'
 import { validateAccountIndex, validateNetworkName } from '../utils/validation'
 import { log, logError } from '../utils/logger'
 import { AddressInfoResult } from '../types'
@@ -52,36 +51,24 @@ export class AddressService {
     accountIndex = 0,
     walletId?: string,
   ): Promise<string> {
-    // Validate inputs
     validateNetworkName(network)
     validateAccountIndex(accountIndex)
 
     const walletStore = getWalletStore()
     const walletState = walletStore.getState()
 
-    // Resolve walletId from parameter or store
     const targetWalletId = resolveWalletId(walletId)
 
-    // Check cache first (per-wallet)
-    const cachedAddress =
-      walletState.addresses[targetWalletId]?.[network]?.[accountIndex]
+    const cachedAddress = walletState.addresses[targetWalletId]?.[network]?.[accountIndex]
     if (cachedAddress) {
-      // Validate cached address format
-      if (!isValidAddress(cachedAddress)) {
-        throw new Error(
-          `Cached address for ${targetWalletId}:${network}:${accountIndex} has invalid format`,
-        )
-      }
       return cachedAddress
     }
 
-    // Require initialized worklet
     const hrpc = await requireInitialized()
 
     const loadingKey = `${network}-${accountIndex}`
 
     try {
-      // Update loading state (per-wallet)
       walletStore.setState((prev) =>
         produce(prev, (state) => {
           state.walletLoading[targetWalletId] ??= {}
@@ -89,7 +76,6 @@ export class AddressService {
         }),
       )
 
-      // Call getAddress method on the account
       const response = await hrpc.callMethod({
         methodName: 'getAddress',
         network,
@@ -105,10 +91,6 @@ export class AddressService {
         const parsed = JSON.parse(response.result)
         if (typeof parsed !== 'string') {
           throw new Error('Address must be a string')
-        }
-        // Runtime validation of address format
-        if (!isValidAddress(parsed)) {
-          throw new Error(`Address from worklet has invalid format: ${parsed}`)
         }
         address = parsed
       } catch (error) {
@@ -138,7 +120,6 @@ export class AddressService {
 
       return address
     } catch (error) {
-      // Update loading state on error (per-wallet)
       walletStore.setState((prev) =>
         produce(prev, (state) => {
           state.walletLoading[targetWalletId] ??= {}

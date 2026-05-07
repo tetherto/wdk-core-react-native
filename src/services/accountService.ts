@@ -112,6 +112,7 @@ export class AccountService {
           network,
           accountIndex,
           methodName,
+          silent: methodName === 'getTokenBalances'
         },
       )
     }
