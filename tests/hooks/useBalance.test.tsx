@@ -292,8 +292,8 @@ describe('useBalance', () => {
     });
     expect(mockAccountService.callAccountMethod).toHaveBeenCalledWith(mockAssetNative.getNetwork(), mockAccountIndex, 'getBalance');
     expect(mockConvertBalanceToString).toHaveBeenCalledWith(mockBalanceValue);
-    expect(mockBalanceService.updateBalance).toHaveBeenCalledWith(mockAccountIndex, mockAssetNative.getNetwork(), mockAssetNative.getId(), mockBalanceValue);
-    expect(mockBalanceService.updateLastBalanceUpdate).toHaveBeenCalledWith('ethereum', mockAccountIndex);
+    expect(mockBalanceService.updateBalance).toHaveBeenCalledWith(mockAccountIndex, mockAssetNative.getNetwork(), mockAssetNative.getId(), mockBalanceValue, 'mock-active-wallet');
+    expect(mockBalanceService.updateLastBalanceUpdate).toHaveBeenCalledWith('ethereum', mockAccountIndex, 'mock-active-wallet');
   });
 
   it('should handle fetch errors correctly', async () => {

@@ -48,11 +48,19 @@ import { produce } from 'immer'
 
 import { getWalletStore } from '../store/walletStore'
 import { resolveWalletId, updateBalanceInState, getNestedState } from '../utils/storeHelpers'
+import { RequestCoordinator } from '../utils/requestCoordinator'
 import { validateBalance, validateWalletParams } from '../utils/validation'
 import { BalanceFetchResult, IAsset } from '../types'
 import { AccountService } from './accountService'
 import { convertBalanceToString } from '../utils/balanceUtils'
 import { log, logError, logWarn } from '../utils/logger'
+
+/**
+ * Dedupes concurrent fetchBalance/fetchBalances calls and fences stale
+ * writes if the worklet's loaded wallet changes (switch/lock/delete)
+ * mid-flight.
+ */
+const balanceCoordinator = new RequestCoordinator()
 
 /**
  * Balance Service
@@ -293,6 +301,7 @@ type FetchBalancesResult =
   | { success: false; asset: IAsset; error: unknown };
 
 const BATCH_NOT_SUPPORTED = 'Batch balance fetching is not supported';
+const DEFAULT_NETWORK_TIMEOUT_MS = 15_000;
 
 async function fetchNonNativeBalancesInBatch(network: string, accountIndex: number, nonNativeAssets: IAsset[]): Promise<FetchBalancesResult[]> {
   try {
@@ -414,8 +423,10 @@ async function fetchBalancesForNetwork(accountIndex: number, networkAssets: IAss
 export async function fetchBalances(
   accountIndex: number,
   assets: IAsset[],
-  networkTimeoutMs: number = 15_000,
+  networkTimeoutMs: number = DEFAULT_NETWORK_TIMEOUT_MS,
 ): Promise<BalanceFetchResult[]> {
+  const targetWalletId = resolveWalletId()
+
   const assetsByNetwork = new Map<string, IAsset[]>();
   assets.forEach(asset => {
     const network = asset.getNetwork();
@@ -426,47 +437,8 @@ export async function fetchBalances(
   });
 
   const allNetworkPromises = Array.from(assetsByNetwork.entries()).map(
-    async ([network, networkAssets]) => {
-      let timedOut = false;
-      let timeoutId: ReturnType<typeof setTimeout>
-      const timeout = new Promise<FetchBalancesResult[]>(resolve => {
-        timeoutId = setTimeout(() => {
-          timedOut = true;
-          const error = new Error(`Network ${network} timed out after ${networkTimeoutMs}ms`);
-          logWarn(`[fetchBalances] ${error.message}`);
-          resolve(networkAssets.map(asset => ({ success: false, asset, error })));
-        }, networkTimeoutMs);
-      });
-
-      const networkResults = await Promise.race([
-        fetchBalancesForNetwork(accountIndex, networkAssets),
-        timeout
-      ]);
-      clearTimeout(timeoutId!);
-
-      if (!timedOut) {
-        let hasSuccessfulUpdate = false;
-        for (const result of networkResults) {
-          if (!result.success) {
-            continue;
-          }
-          hasSuccessfulUpdate = true;
-          BalanceService.updateBalance(
-            accountIndex,
-            network,
-            result.asset.getId(),
-            result.balance,
-          );
-        }
-
-        if (hasSuccessfulUpdate) {
-          BalanceService.updateLastBalanceUpdate(network, accountIndex);
-          log(`[fetchBalances] Fetched balances for network ${network}:${accountIndex}`);
-        }
-      }
-
-      return networkResults;
-    },
+    ([network, networkAssets]) =>
+      fetchAndCacheNetworkBalances(accountIndex, network, networkAssets, networkTimeoutMs, targetWalletId),
   );
 
   const allResults = (await Promise.all(allNetworkPromises)).flat();
@@ -501,39 +473,113 @@ export async function fetchBalances(
   });
 }
 
+/** Fetches and caches balances for one network, deduped by cache key. */
+function fetchAndCacheNetworkBalances(
+  accountIndex: number,
+  network: string,
+  networkAssets: IAsset[],
+  networkTimeoutMs: number,
+  targetWalletId: string,
+): Promise<FetchBalancesResult[]> {
+  const assetIds = networkAssets.map((asset) => asset.getId()).sort().join(',')
+  const cacheKey = `${targetWalletId}:${network}:${accountIndex}:${assetIds}`
+
+  return balanceCoordinator.run(
+    cacheKey,
+    () => fetchNetworkBalancesWithTimeout(accountIndex, network, networkAssets, networkTimeoutMs),
+    (networkResults) => commitNetworkBalances(accountIndex, network, targetWalletId, networkResults),
+  )
+}
+
+async function fetchNetworkBalancesWithTimeout(
+  accountIndex: number,
+  network: string,
+  networkAssets: IAsset[],
+  networkTimeoutMs: number,
+): Promise<FetchBalancesResult[]> {
+  let timeoutId: ReturnType<typeof setTimeout>
+  const timeout = new Promise<FetchBalancesResult[]>(resolve => {
+    timeoutId = setTimeout(() => {
+      const error = new Error(`Network ${network} timed out after ${networkTimeoutMs}ms`);
+      logWarn(`[fetchBalances] ${error.message}`);
+      resolve(networkAssets.map(asset => ({ success: false, asset, error })));
+    }, networkTimeoutMs);
+  });
+
+  const results = await Promise.race([
+    fetchBalancesForNetwork(accountIndex, networkAssets),
+    timeout,
+  ]);
+  clearTimeout(timeoutId!);
+  return results;
+}
+
+function commitNetworkBalances(
+  accountIndex: number,
+  network: string,
+  targetWalletId: string,
+  networkResults: FetchBalancesResult[],
+): void {
+  let hasSuccessfulUpdate = false;
+  for (const result of networkResults) {
+    if (!result.success) {
+      continue;
+    }
+    hasSuccessfulUpdate = true;
+    BalanceService.updateBalance(accountIndex, network, result.asset.getId(), result.balance, targetWalletId);
+  }
+
+  if (hasSuccessfulUpdate) {
+    BalanceService.updateLastBalanceUpdate(network, accountIndex, targetWalletId);
+    log(`[fetchBalances] Fetched balances for network ${network}:${accountIndex}`);
+  }
+}
+
 /**
- * Fetch balance for a specific asset
+ * Fetch balance for a specific asset.
+ *
+ * Routes through the same per-network dedupe/commit path as fetchBalances,
+ * treating this as a batch of one - so a concurrent fetchBalances call for
+ * the same wallet/network/account/asset shares this fetch instead of firing
+ * a duplicate RPC.
  *
  * @param accountIndex - Account index
  * @param asset - Asset entity (contains ID and contract details)
- * @param walletId - Optional wallet identifier (defaults to activeWalletId)
  * @returns Promise with balance fetch result
  */
-export async function fetchBalance(accountIndex: number, asset: IAsset): Promise<BalanceFetchResult> {
-  const results = await fetchBalancesForNetwork(accountIndex, [asset]);
-  const result = results[0]!;
+export async function fetchBalance(
+  accountIndex: number,
+  asset: IAsset,
+): Promise<BalanceFetchResult> {
+  const targetWalletId = resolveWalletId()
+  const network = asset.getNetwork()
 
-  if (result.success) {
-    BalanceService.updateBalance(accountIndex, result.asset.getNetwork(), result.asset.getId(), result.balance);
-    BalanceService.updateLastBalanceUpdate(result.asset.getNetwork(), accountIndex);
+  const [result] = await fetchAndCacheNetworkBalances(
+    accountIndex,
+    network,
+    [asset],
+    DEFAULT_NETWORK_TIMEOUT_MS,
+    targetWalletId,
+  )
 
+  if (result!.success) {
     return {
       success: true,
-      network: result.asset.getNetwork(),
+      network,
       accountIndex,
-      assetId: result.asset.getId(),
-      balance: result.balance,
+      assetId: result!.asset.getId(),
+      balance: result!.balance,
     };
   }
 
-  const errorMessage = result.error instanceof Error ? result.error.message : String(result.error);
-  logError(`Failed to fetch balance for ${result.asset.getNetwork()}:${accountIndex}:${result.asset.getId()}:`, result.error);
+  const errorMessage = result!.error instanceof Error ? result!.error.message : String(result!.error);
+  logError(`Failed to fetch balance for ${network}:${accountIndex}:${result!.asset.getId()}:`, result!.error);
 
   return {
     success: false,
-    network: result.asset.getNetwork(),
+    network,
     accountIndex,
-    assetId: result.asset.getId(),
+    assetId: result!.asset.getId(),
     balance: null,
     error: errorMessage,
   };
