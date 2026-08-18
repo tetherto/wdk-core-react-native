@@ -31,6 +31,7 @@ import type { WdkConfigs, BundleConfig } from '../types'
 import type { WorkletState } from '../store/workletStore'
 import HRPC from '@tetherto/pear-wrk-wdk/hrpc'
 import { createResolvablePromise } from '../utils/promise'
+import { bumpEpoch } from '../utils/workletEpoch'
 
 /**
  * Worklet Lifecycle Service
@@ -182,6 +183,11 @@ export class WorkletLifecycleService {
     if (!state.isWorkletStarted) {
       throw new Error('Worklet must be started before initializing WDK')
     }
+
+    // Also bump here, not just in reset(): this is the moment the worklet
+    // actually gets a new seed, so a fetch started after reset() but before
+    // this point needs its own fencing too.
+    bumpEpoch()
 
     try {
       store.setState({ error: null, isLoading: true })
@@ -531,6 +537,12 @@ export class WorkletLifecycleService {
     })
 
     workletStore.setState({ isWorkletInitializedPromise: createResolvablePromise<boolean>() })
+
+    // Bump the worklet epoch so any address/balance fetch still in flight for
+    // the previously-loaded wallet skips writing once it resolves. reset() is
+    // the sole choke point every flow that changes the worklet's loaded
+    // wallet (delete, lock, switch) routes through - see workletEpoch.ts.
+    bumpEpoch()
 
     // Clear addresses from wallet store
     walletStore.setState({

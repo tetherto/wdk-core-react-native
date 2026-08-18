@@ -12,12 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { BalanceService } from '../../src/services/balanceService'
+import { BalanceService, fetchBalance, fetchBalances } from '../../src/services/balanceService'
 import { getWalletStore } from '../../src/store/walletStore'
+import { AccountService } from '../../src/services/accountService'
+import { bumpEpoch } from '../../src/utils/workletEpoch'
+import type { IAsset } from '../../src/types'
 
 // Mock stores
 jest.mock('../../src/store/walletStore', () => ({
   getWalletStore: jest.fn(),
+}))
+
+jest.mock('../../src/services/accountService', () => ({
+  AccountService: { callAccountMethod: jest.fn() },
 }))
 
 const MOCK_NATIVE_TOKEN_ID = 'eth-native'
@@ -415,6 +422,188 @@ describe('BalanceService', () => {
         balanceLoading: {},
         lastBalanceUpdate: {},
       })
+    })
+  })
+})
+
+describe('fetchBalance / fetchBalances', () => {
+  let mockWalletStore: any
+  const mockAccountService = AccountService as jest.Mocked<typeof AccountService>
+
+  const nativeAsset: IAsset = {
+    getId: () => 'eth-native',
+    getNetwork: () => 'ethereum',
+    isNative: () => true,
+    getContractAddress: () => null,
+    getSymbol: () => 'ETH',
+    getName: () => 'Ethereum',
+    getDecimals: () => 18,
+  } as unknown as IAsset
+
+  const usdtAsset: IAsset = {
+    getId: () => 'usdt',
+    getNetwork: () => 'ethereum',
+    isNative: () => false,
+    getContractAddress: () => '0xabc',
+    getSymbol: () => 'USDT',
+    getName: () => 'Tether',
+    getDecimals: () => 6,
+  } as unknown as IAsset
+
+  function replaySetStateCalls(setStateMock: jest.Mock) {
+    let state: any = { balances: {}, balanceLoading: {}, lastBalanceUpdate: {} }
+    for (const [updater] of setStateMock.mock.calls) {
+      state = typeof updater === 'function' ? { ...state, ...updater(state) } : { ...state, ...updater }
+    }
+    return state
+  }
+
+  // Overwrites getState with a fresh mock returning the given active wallet -
+  // used to simulate a wallet switch by calling this again mid-test.
+  function mockActiveWallet(walletId: string) {
+    mockWalletStore.getState = jest.fn(() => ({
+      balances: {},
+      balanceLoading: {},
+      lastBalanceUpdate: {},
+      activeWalletId: walletId,
+    }))
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+
+    mockWalletStore = { getState: jest.fn(), setState: jest.fn() }
+    mockActiveWallet('active-wallet')
+    ;(getWalletStore as jest.Mock).mockReturnValue(mockWalletStore)
+  })
+
+  describe('wallet capture at kickoff', () => {
+    it('attributes the write to the wallet active when the fetch started, not whatever is active when it resolves', async () => {
+      let resolveCallMethod: (value: string) => void
+      mockAccountService.callAccountMethod.mockImplementation(
+        () => new Promise((resolve) => { resolveCallMethod = resolve }),
+      )
+
+      const pending = fetchBalance(0, nativeAsset) // captures 'active-wallet'
+
+      // Simulate a wallet switch happening while the fetch is in flight.
+      mockActiveWallet('wallet-b')
+      resolveCallMethod!('1000000000000000000')
+
+      await pending
+
+      const finalState = replaySetStateCalls(mockWalletStore.setState)
+      expect(finalState.balances['active-wallet']?.ethereum?.[0]?.[nativeAsset.getId()]).toBe(
+        '1000000000000000000',
+      )
+      expect(finalState.balances['wallet-b']).toBeUndefined()
+    })
+  })
+
+  describe('dedupe', () => {
+    it('shares a single in-flight call for concurrent fetchBalance calls to the same wallet/network/account/asset', async () => {
+      mockAccountService.callAccountMethod.mockResolvedValue('1000000000000000000')
+
+      const [a, b] = await Promise.all([
+        fetchBalance(0, nativeAsset),
+        fetchBalance(0, nativeAsset),
+      ])
+
+      expect(mockAccountService.callAccountMethod).toHaveBeenCalledTimes(1)
+      expect(a).toEqual(b)
+    })
+
+    it('shares a single in-flight fetch between fetchBalance and fetchBalances for the same asset', async () => {
+      mockAccountService.callAccountMethod.mockResolvedValue('1000000000000000000')
+
+      const [single, batch] = await Promise.all([
+        fetchBalance(0, nativeAsset),
+        fetchBalances(0, [nativeAsset]),
+      ])
+
+      expect(mockAccountService.callAccountMethod).toHaveBeenCalledTimes(1)
+      expect(single.balance).toBe('1000000000000000000')
+      expect(batch[0]?.balance).toBe('1000000000000000000')
+    })
+
+    it('does not dedupe calls for different wallets', async () => {
+      mockAccountService.callAccountMethod.mockResolvedValue('1000000000000000000')
+
+      // Both calls are issued synchronously (no await in between), so each
+      // captures its wallet and stakes its cache-key claim before the other runs.
+      const p1 = fetchBalance(0, nativeAsset) // captures 'active-wallet'
+      mockActiveWallet('other-wallet')
+      const p2 = fetchBalance(0, nativeAsset) // captures 'other-wallet'
+
+      await Promise.all([p1, p2])
+
+      expect(mockAccountService.callAccountMethod).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not dedupe calls for different assets', async () => {
+      mockAccountService.callAccountMethod.mockResolvedValue('1000000000000000000')
+
+      await Promise.all([
+        fetchBalance(0, nativeAsset),
+        fetchBalance(0, usdtAsset),
+      ])
+
+      expect(mockAccountService.callAccountMethod).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('epoch fencing', () => {
+    it('fetchBalance skips the store write after a worklet epoch bump', async () => {
+      let resolveCallMethod: (value: string) => void
+      mockAccountService.callAccountMethod.mockImplementation(
+        () => new Promise((resolve) => { resolveCallMethod = resolve }),
+      )
+
+      const pending = fetchBalance(0, nativeAsset)
+
+      // Simulate a wallet switch/lock/delete happening mid-flight.
+      bumpEpoch()
+      resolveCallMethod!('1000000000000000000')
+
+      const result = await pending
+      expect(result.success).toBe(true)
+
+      const finalState = replaySetStateCalls(mockWalletStore.setState)
+      expect(finalState.balances['active-wallet']).toBeUndefined()
+    })
+
+    it('fetchBalances skips the store write after a worklet epoch bump', async () => {
+      let resolveCallMethod: (value: string) => void
+      mockAccountService.callAccountMethod.mockImplementation(
+        () => new Promise((resolve) => { resolveCallMethod = resolve }),
+      )
+
+      const pending = fetchBalances(0, [nativeAsset])
+
+      bumpEpoch()
+      resolveCallMethod!('1000000000000000000')
+
+      const results = await pending
+      expect(results[0]?.success).toBe(true)
+
+      const finalState = replaySetStateCalls(mockWalletStore.setState)
+      expect(finalState.balances['active-wallet']).toBeUndefined()
+    })
+
+    it('starts a fresh fetchBalance call after an epoch bump, instead of joining the stale in-flight promise', async () => {
+      mockAccountService.callAccountMethod
+        .mockResolvedValueOnce('1000000000000000000')
+        .mockResolvedValueOnce('2000000000000000000')
+
+      const stale = fetchBalance(0, nativeAsset)
+      bumpEpoch()
+      const fresh = fetchBalance(0, nativeAsset)
+
+      const [staleResult, freshResult] = await Promise.all([stale, fresh])
+
+      expect(mockAccountService.callAccountMethod).toHaveBeenCalledTimes(2)
+      expect(staleResult.balance).toBe('1000000000000000000')
+      expect(freshResult.balance).toBe('2000000000000000000')
     })
   })
 })

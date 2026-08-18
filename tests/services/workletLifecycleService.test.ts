@@ -13,9 +13,11 @@
 // limitations under the License.
 
 import { WorkletLifecycleService } from '../../src/services/workletLifecycleService'
+import { getWalletStore } from '../../src/store/walletStore'
 import { getWorkletStore } from '../../src/store/workletStore'
 import type { WdkConfigs, BundleConfig } from '../../src/types'
 import { createResolvablePromise } from '../../src/utils/promise'
+import { getEpoch } from '../../src/utils/workletEpoch'
 import HRPC from '@tetherto/pear-wrk-wdk/hrpc'
 
 const mockWorkletInstance = {
@@ -552,6 +554,71 @@ describe('WorkletLifecycleService', () => {
         encryptedSeed: opts.encryptedSeed,
         config: JSON.stringify(defaultNetworkConfigs),
       })
+    })
+
+    it('bumps the worklet epoch - reset() alone does not cover the gap before the new seed actually loads', async () => {
+      mockInitializeWDK.mockClear()
+      mockInitializeWDK.mockResolvedValue({ status: 'success' })
+
+      const initPromise = createResolvablePromise<boolean>()
+      const startPromise = createResolvablePromise<boolean>()
+      startPromise.resolve(true)
+      initPromise.resolve(true)
+
+      ;(mockStore as any).getState = jest.fn(() => ({
+        isWorkletStarted: true,
+        isInitialized: false,
+        isLoading: false,
+        worklet: mockWorkletInstance,
+        hrpc: mockHRPCInstance,
+        ipc: mockWorkletInstance.IPC,
+        error: null,
+        wdkConfigs: defaultNetworkConfigs,
+        workletStartResult: null,
+        wdkInitResult: null,
+        isWorkletInitializedPromise: initPromise,
+        isWorkletStartedPromise: startPromise,
+      }))
+
+      const before = getEpoch()
+
+      await WorkletLifecycleService.initializeWDK({
+        encryptionKey: 'key',
+        encryptedSeed: 'seed',
+      })
+
+      expect(getEpoch()).toBe(before + 1)
+    })
+  })
+
+  describe('reset', () => {
+    it('clears worklet init state and addresses', () => {
+      getWalletStore().setState({ addresses: { 'wallet-1': { ethereum: { 0: '0xabc' } } } })
+
+      WorkletLifecycleService.reset()
+
+      expect(mockSharedStore.setState).toHaveBeenCalledWith(
+        expect.objectContaining({ isInitialized: false, wdkInitResult: null }),
+      )
+      expect(getWalletStore().getState().addresses).toEqual({})
+    })
+
+    it('bumps the worklet epoch, so any fetch already in flight for the previous wallet can detect it went stale', () => {
+      const before = getEpoch()
+
+      WorkletLifecycleService.reset()
+
+      expect(getEpoch()).toBe(before + 1)
+    })
+
+    it('bumps the epoch again on every call - delete, lock, and switch all route through reset()', () => {
+      const before = getEpoch()
+
+      WorkletLifecycleService.reset()
+      WorkletLifecycleService.reset()
+      WorkletLifecycleService.reset()
+
+      expect(getEpoch()).toBe(before + 3)
     })
   })
 })
