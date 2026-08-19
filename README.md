@@ -19,6 +19,7 @@ This library uses a unique **worklet bundle** to run intensive cryptographic ope
 - [Bundle Configuration](#bundle-configuration)
 - [Quick Start](#quick-start)
 - [Guide to Hooks](#guide-to-hooks)
+- [Wallet Lifecycle](#wallet-lifecycle)
 - [Best Practices](#best-practices)
 - [Architecture](#architecture)
 - [Security](#security)
@@ -103,37 +104,54 @@ Getting started involves three main steps:
 The library's functionality is exposed through a set of React hooks. They are designed to separate concerns, giving you specific tools for managing the app state, wallet lifecycle, and account interactions.
 
 ### `useWdkApp`
-*   **Design Rationale:** Provides a global, top-level view of the library's state. It's the single source of truth for whether the underlying engine is ready, allowing your app to react safely.
-*   **Standard Use Case:** Displaying a loading screen while the WDK initializes.
+*   **Design Rationale:** Provides a global, top-level view of the library's state via a single `state.status` value. It's the source of truth for which screen your app should render - loading, onboarding, unlock, or the main app.
+*   **Standard Use Case:** Routing your app's top-level UI off one status value instead of juggling several booleans.
 *   **Snippet:**
     ```typescript
     import { useWdkApp } from '@tetherto/wdk-react-native-core';
 
-    const { isReady, error } = useWdkApp();
-    if (!isReady) {
-      // Show a loading or splash screen while the worklet starts
+    const { state } = useWdkApp();
+
+    switch (state.status) {
+      case 'INITIALIZING':
+        return <LoadingScreen />;
+      case 'NO_WALLET':
+        return <CreateOrRestoreWalletScreen />;
+      case 'LOCKED':
+        // state.walletId is a hint, present when a specific wallet is
+        // targeted; it's undefined when a wallet exists but none is
+        // active yet. Either way, show your own unlock flow.
+        return <UnlockScreen walletId={state.walletId} />;
+      case 'READY':
+        return <AppContent walletId={state.walletId} />;
+      case 'ERROR':
+        return <ErrorScreen error={state.error} />;
     }
     ```
+    See [Wallet Lifecycle](#wallet-lifecycle) for exactly what each status means and when it's reported.
 
 ### `useWalletManager`
-*   **Design Rationale:** Exclusively handles "heavy" lifecycle actions that affect the entire wallet (create, load, import). Separating these ensures they are used deliberately, typically during app startup or in a settings screen.
-*   **Standard Use Case:** Checking if a wallet exists on startup, creating or loading a wallet.
+*   **Design Rationale:** Exclusively handles the wallet's identity lifecycle - create, restore, unlock, lock, and switch. Identity is always caller-owned: the library never guesses which wallet to load or auto-unlocks on your behalf, so these actions are explicit and deliberate, typically triggered from app startup, a settings screen, or your own auth flow.
+*   **Standard Use Case:** Onboarding a new user, unlocking an existing wallet after your own auth check, or switching between accounts.
 *   **Snippet:**
     ```typescript
-    import { useWdkApp, useWalletManager } from '@tetherto/wdk-react-native-core';
+    import { useWalletManager } from '@tetherto/wdk-react-native-core';
 
-    const { isReady } = useWdkApp();
-    const { createWallet, loadWallet } = useWalletManager();
-    
-    useEffect(() => {
-      if (isReady) {
-        const setup = async () => {
-          await createWallet();
-        };
-        setup();
-      }
-    }, [isReady, hasWallet, createWallet, loadWallet]);
+    const { createWallet, unlock, lock, switchWallet } = useWalletManager();
+
+    // First-time user: create a wallet for a specific id (e.g. your app's user id)
+    await createWallet(userId);
+
+    // Returning user: unlock after your own auth check (biometrics, passcode, etc.)
+    await unlock(userId);
+
+    // Signing out
+    await lock();
+
+    // Switching accounts - atomically locks the previous wallet, then unlocks the next
+    await switchWallet(otherUserId);
     ```
+    See [Wallet Lifecycle](#wallet-lifecycle) for the full set of rules around switching identities.
 
 ### `useAddresses`
 *   **Design Rationale:** Decouples the loading and management of addresses from other account operations. This provides a focused way to get a list of addresses for the active wallet.
@@ -182,6 +200,19 @@ The library's functionality is exposed through a set of React hooks. They are de
 
     const balanceString = data?.balance; // e.g., '1000000000000000000'
     ```
+
+## Wallet Lifecycle
+
+Identity is always **caller-owned** - the library never persists, guesses, or auto-unlocks a wallet for you. Only one wallet can be active at a time: `unlock`, `createWallet`, and `restoreWallet` all reject if a wallet is already active, so call `await lock()` first before switching to a different one (or use `switchWallet(walletId)`, which does both atomically).
+
+**Status meanings (`useWdkApp().state.status`):**
+
+- `INITIALIZING` - not enough information yet to say anything more specific.
+- `NO_WALLET` - confirmed: no wallet exists. Safe to show onboarding.
+- `LOCKED` - no wallet unlocked. `walletId` is a hint (present when a specific wallet is targeted, absent when one just isn't active yet) - show your own unlock flow either way.
+- `READY` - a wallet is unlocked and ready.
+- `ERROR` - something failed; inspect `state.error`.
+- `REINITIALIZING` - the worklet is being manually reinitialized.
 
 ## Best Practices
 

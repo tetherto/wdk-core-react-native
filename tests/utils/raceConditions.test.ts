@@ -18,24 +18,8 @@
  * Tests concurrent operations, state synchronization, and mutex behavior
  */
 
-import { WalletSwitchingService } from '../../src/services/walletSwitchingService'
 import { getWalletStore } from '../../src/store/walletStore'
 import { acquireOperationMutex, withOperationMutex, isOperationInProgress } from '../../src/utils/operationMutex'
-
-jest.mock('../../src/services/walletSetupService', () => ({
-  WalletSetupService: {
-    hasWallet: jest.fn(),
-    loadExistingWallet: jest.fn(),
-    clearCredentialsCache: jest.fn(),
-  },
-}))
-
-jest.mock('../../src/services/workletLifecycleService', () => ({
-  WorkletLifecycleService: {
-    ensureWorkletStarted: jest.fn(),
-    initializeWDK: jest.fn(),
-  },
-}))
 
 jest.mock('../../src/store/walletStore', () => {
   const actual = jest.requireActual('../../src/store/walletStore')
@@ -183,87 +167,6 @@ describe('Race Conditions', () => {
 
       expect(operation).toHaveBeenCalledTimes(1)
       expect(isOperationInProgress()).toBe(false) // Mutex should be released even on error
-    })
-  })
-
-  describe('Wallet Switching Race Conditions', () => {
-    it('should prevent concurrent wallet switches', async () => {
-      const { WalletSetupService } = require('../../src/services/walletSetupService')
-      const { WorkletLifecycleService } = require('../../src/services/workletLifecycleService')
-
-      const walletId1 = 'wallet-1'
-      const walletId2 = 'wallet-2'
-      const credentials = {
-        encryptionKey: 'test-key',
-        encryptedSeed: 'test-seed',
-      }
-
-      mockWalletStore.getState.mockReturnValue({
-        activeWalletId: null,
-        walletLoadingState: { type: 'not_loaded' },
-        isOperationInProgress: false,
-        currentOperation: null,
-      })
-
-      ;(WalletSetupService.hasWallet as jest.Mock).mockResolvedValue(true)
-      ;(WorkletLifecycleService.ensureWorkletStarted as jest.Mock).mockResolvedValue(undefined)
-      ;(WalletSetupService.loadExistingWallet as jest.Mock).mockResolvedValue(credentials)
-      ;(WorkletLifecycleService.initializeWDK as jest.Mock).mockImplementation(
-        async () => {
-          // Simulate slow operation
-          await new Promise((resolve) => setTimeout(resolve, 100))
-        }
-      )
-
-      // Start two concurrent switches
-      const promise1 = WalletSwitchingService.switchToWallet(walletId1)
-      const promise2 = WalletSwitchingService.switchToWallet(walletId2)
-
-      // Second switch should be blocked by mutex
-      await expect(promise2).rejects.toThrow('Another operation is in progress')
-
-      // First switch should complete
-      await promise1
-      expect(WalletSetupService.loadExistingWallet).toHaveBeenCalledWith(walletId1)
-      expect(WalletSetupService.loadExistingWallet).not.toHaveBeenCalledWith(walletId2)
-    })
-
-    it('should handle rapid sequential wallet switches', async () => {
-      const { WalletSetupService } = require('../../src/services/walletSetupService')
-      const { WorkletLifecycleService } = require('../../src/services/workletLifecycleService')
-
-      const walletId1 = 'wallet-1'
-      const walletId2 = 'wallet-2'
-      const credentials = {
-        encryptionKey: 'test-key',
-        encryptedSeed: 'test-seed',
-      }
-
-      ;(WalletSetupService.hasWallet as jest.Mock).mockResolvedValue(true)
-      ;(WorkletLifecycleService.ensureWorkletStarted as jest.Mock).mockResolvedValue(undefined)
-      ;(WalletSetupService.loadExistingWallet as jest.Mock).mockResolvedValue(credentials)
-      ;(WorkletLifecycleService.initializeWDK as jest.Mock).mockResolvedValue(undefined)
-
-      // First switch
-      mockWalletStore.getState.mockReturnValue({
-        activeWalletId: null,
-        walletLoadingState: { type: 'not_loaded' },
-        isOperationInProgress: false,
-        currentOperation: null,
-      })
-      await WalletSwitchingService.switchToWallet(walletId1)
-
-      // Second switch (after first completes)
-      mockWalletStore.getState.mockReturnValue({
-        activeWalletId: walletId1,
-        walletLoadingState: { type: 'ready', identifier: walletId1 },
-        isOperationInProgress: false,
-        currentOperation: null,
-      })
-      await WalletSwitchingService.switchToWallet(walletId2)
-
-      expect(WalletSetupService.loadExistingWallet).toHaveBeenCalledWith(walletId1)
-      expect(WalletSetupService.loadExistingWallet).toHaveBeenCalledWith(walletId2)
     })
   })
 

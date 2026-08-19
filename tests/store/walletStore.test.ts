@@ -288,7 +288,8 @@ describe('walletStore', () => {
       expect(stateBeforeRehydration.addresses).toEqual(mockState.addresses)
       expect(stateBeforeRehydration.balances).toEqual(mockState.balances)
       expect(stateBeforeRehydration.lastBalanceUpdate).toEqual(mockState.lastBalanceUpdate)
-      expect(stateBeforeRehydration.activeWalletId).toEqual(mockState.activeWalletId)
+
+      expect(stateBeforeRehydration.activeWalletId).toBeNull()
     })
 
     it('should do nothing if state is undefined during rehydration', () => {

@@ -7,7 +7,7 @@
 **Solutions**:
 1. Check that `wdkConfigs` are valid (use `validateWdkConfigs()`)
 2. Check console logs for detailed error messages
-3. Try calling `retry()` method from context
+3. Re-run whichever `useWalletManager` call failed (`unlock`/`createWallet`/`restoreWallet`) - there is no `retry()` method; the library never retries lifecycle actions on your behalf
 
 **Common Errors**:
 - "WDK not initialized" → Worklet failed to start, check network configs

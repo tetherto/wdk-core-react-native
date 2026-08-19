@@ -16,7 +16,6 @@ import React, { createContext, useMemo, useRef, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createSecureStorage } from '@tetherto/wdk-react-native-secure-storage'
 
-import { useAppLifecycle } from '../hooks/internal/useAppLifecycle'
 import { useWalletOrchestrator } from '../hooks/internal/useWalletOrchestrator'
 import { useWorkletInitializer } from '../hooks/internal/useWorkletInitializer'
 
@@ -31,16 +30,33 @@ import {
 import type { WdkConfigs, BundleConfig } from '../types'
 
 export type WdkAppState =
+  /** The worklet hasn't started yet, or there isn't enough information yet
+   * to report anything more specific (e.g. the worklet has started but no
+   * identity or wallets are known - nothing has been created/restored/
+   * unlocked this session, and nothing has told the SDK who the user is). */
   | { status: 'INITIALIZING' }
+  /** The worklet is being manually reinitialized via reinitializeWdk(). */
   | { status: 'REINITIALIZING' }
+  /** No wallet exists at all - walletList is confirmed empty, so this is a
+   * genuinely fresh device/user. Safe to route to onboarding
+   * (create/restore). */
   | { status: 'NO_WALLET' }
-  | { status: 'LOCKED'; walletId: string }
+  /** No wallet is currently unlocked. walletId is present when a specific
+   * wallet is targeted (e.g. unlock()/switchWallet() was called and is still
+   * mid-decrypt) and absent when a wallet is only known to exist (from
+   * walletList) but none is currently targeted (e.g. right after lock()).
+   * Either way, the correct action is the same: show your own unlock flow,
+   * using walletId as an optional hint rather than a required one. */
+  | { status: 'LOCKED'; walletId?: string }
+  /** A wallet is fully unlocked and its identity has been confirmed to
+   * match what's actually loaded. Safe to render the main app. */
   | { status: 'READY'; walletId: string }
+  /** Something failed - inspect error for details. Can originate from
+   * either the worklet layer or a wallet operation (create/unlock/etc). */
   | { status: 'ERROR'; error: Error };
 
 export interface WdkAppContextValue {
   state: WdkAppState;
-  retry: () => void;
 }
 
 const WdkAppContext = createContext<WdkAppContextValue | null>(null)
@@ -51,9 +67,6 @@ export interface WdkAppProviderProps<
 > {
   bundle: BundleConfig
   wdkConfigs: WdkConfigs<TNetwork, TProtocol>
-  enableAutoInitialization?: boolean
-  currentUserId?: string | null
-  clearSensitiveDataOnBackground?: boolean
   children: React.ReactNode
 }
 
@@ -73,9 +86,6 @@ export function WdkAppProvider<
 >({
   bundle: bundleConfig,
   wdkConfigs,
-  enableAutoInitialization = true,
-  currentUserId,
-  clearSensitiveDataOnBackground = false,
   children,
 }: WdkAppProviderProps<TNetwork, TProtocol>) {
   // Synchronous service setup (must run before child effects)
@@ -110,11 +120,7 @@ export function WdkAppProvider<
     wdkConfigs,
   })
 
-  useAppLifecycle({ clearSensitiveDataOnBackground })
-
-  const { state, retry } = useWalletOrchestrator({
-    enableAutoInitialization,
-    currentUserId,
+  const { state } = useWalletOrchestrator({
     isWorkletStarted,
     isWorkletInitialized,
     isWdkReinitialized,
@@ -124,9 +130,8 @@ export function WdkAppProvider<
   const contextValue: WdkAppContextValue = useMemo(
     () => ({
       state,
-      retry,
     }),
-    [state, retry],
+    [state],
   )
 
   return (

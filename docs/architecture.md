@@ -3,13 +3,13 @@
 ```
 ┌─────────────────────────────────────┐
 │         App Layer (Hooks)           │
-│  useWallet, useBalance, useWdkApp   │
+│  useWalletManager, useBalance, useWdkApp │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
 │      Provider Layer                  │
 │      WdkAppProvider                  │
-│  (Consolidated state sync effect)    │
+│  (worklet bootstrap + status derivation) │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
@@ -19,7 +19,6 @@
 │  AccountService                       │
 │  BalanceService                       │
 │  WalletSetupService                   │
-│  WalletSwitchingService               │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
@@ -39,7 +38,7 @@
 
 ### State Synchronization
 
-The `WdkAppProvider` uses a **consolidated effect** for wallet state synchronization to prevent race conditions. Multiple interdependent state changes (activeWalletId, addresses, loadingState, errors) must be evaluated atomically in a single effect. See [WALLET_STATE_MACHINE.md](src/store/WALLET_STATE_MACHINE.md) for detailed state machine documentation.
+Identity is caller-owned: `WdkAppProvider` does not auto-create, auto-unlock, or persist which wallet is active. All wallet identity mutations (create, restore, unlock, lock, switch) go through `useWalletManager`, and each of them is serialized behind a single shared operation mutex to prevent race conditions between concurrent calls. `useWdkApp`'s top-level `state.status` is a pure derivation from the underlying store - it has no side effects of its own. See the [Wallet Lifecycle](../README.md#wallet-lifecycle) section of the README for the full rules.
 
 ### Key Services
 

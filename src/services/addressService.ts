@@ -23,6 +23,7 @@ import { produce } from 'immer'
 import { getWalletStore } from '../store/walletStore'
 import { getWorkletStore } from '../store/workletStore'
 import { handleServiceError } from '../utils/errorHandling'
+import { RequestCoordinator } from '../utils/requestCoordinator'
 import {
   requireInitialized,
   resolveWalletId,
@@ -38,6 +39,12 @@ import { AddressInfoResult } from '../types'
  * Provides methods for retrieving and caching wallet addresses.
  */
 export class AddressService {
+  /**
+   * Dedupes concurrent getAddress calls and fences stale writes if the
+   * worklet's loaded wallet changes (switch/lock/delete) mid-flight
+   */
+  private static coordinator = new RequestCoordinator()
+
   /**
    * Get address for a specific network and account index
    * Caches the address in walletStore for future use
@@ -64,17 +71,36 @@ export class AddressService {
       return cachedAddress
     }
 
-    const hrpc = await requireInitialized()
+    const cacheKey = `${targetWalletId}:${network}:${accountIndex}`
 
+    return this.coordinator.run(
+      cacheKey,
+      () => this.fetchAddressFromWorklet(network, accountIndex, targetWalletId),
+      (address) => this.cacheAddress(targetWalletId, network, accountIndex, address),
+    )
+  }
+
+  private static async fetchAddressFromWorklet(
+    network: string,
+    accountIndex: number,
+    targetWalletId: string,
+  ): Promise<string> {
+    const walletStore = getWalletStore()
     const loadingKey = `${network}-${accountIndex}`
 
-    try {
+    const setLoading = (loading: boolean): void => {
       walletStore.setState((prev) =>
         produce(prev, (state) => {
           state.walletLoading[targetWalletId] ??= {}
-          state.walletLoading[targetWalletId][loadingKey] = true
+          state.walletLoading[targetWalletId][loadingKey] = loading
         }),
       )
+    }
+
+    try {
+      const hrpc = await requireInitialized()
+
+      setLoading(true)
 
       const response = await hrpc.callMethod({
         methodName: 'getAddress',
@@ -86,13 +112,12 @@ export class AddressService {
         throw new Error('Failed to get address from worklet')
       }
 
-      let address: string
       try {
         const parsed = JSON.parse(response.result)
         if (typeof parsed !== 'string') {
           throw new Error('Address must be a string')
         }
-        address = parsed
+        return parsed
       } catch (error) {
         throw new Error(
           `Failed to parse address from worklet response: ${
@@ -100,39 +125,27 @@ export class AddressService {
           }`,
         )
       }
-
-      // Cache the address using helper (per-wallet)
-      walletStore.setState((prev) =>
-        produce(
-          updateAddressInState(
-            prev,
-            targetWalletId,
-            network,
-            accountIndex,
-            address,
-          ),
-          (state) => {
-            state.walletLoading[targetWalletId] ??= {}
-            state.walletLoading[targetWalletId][loadingKey] = false
-          },
-        ),
-      )
-
-      return address
     } catch (error) {
-      walletStore.setState((prev) =>
-        produce(prev, (state) => {
-          state.walletLoading[targetWalletId] ??= {}
-          state.walletLoading[targetWalletId][loadingKey] = false
-        }),
-      )
-
       handleServiceError(error, 'AddressService', 'getAddress', {
         network,
         accountIndex,
         walletId: targetWalletId,
       })
+    } finally {
+      setLoading(false)
     }
+  }
+
+  private static cacheAddress(
+    targetWalletId: string,
+    network: string,
+    accountIndex: number,
+    address: string,
+  ): void {
+    const walletStore = getWalletStore()
+    walletStore.setState((prev) =>
+      updateAddressInState(prev, targetWalletId, network, accountIndex, address),
+    )
   }
 
   /**

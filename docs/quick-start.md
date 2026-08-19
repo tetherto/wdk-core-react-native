@@ -62,32 +62,37 @@ function App() {
 
 // Component that uses the wallet hooks
 function MyWalletComponent() {
-  const { isReady } = useWdkApp();
-  const { createWallet, loadWallet, hasWallet } = useWalletManager();
+  const { state } = useWdkApp();
+  const { createWallet, unlock } = useWalletManager();
   const { addresses, loadAddresses } = useAddresses();
 
+  // Identity is caller-owned: the library never picks a wallet id for you.
+  // Replace this with your own app's user/session id.
+  const userId = 'demo-user';
+
   useEffect(() => {
-    if (isReady) {
-      const setupWallet = async () => {
-        const walletExists = await hasWallet();
-        if (walletExists) {
-          await loadWallet();
-        } else {
-          await createWallet();
-        }
-        // After wallet is ready, load addresses for account 0
-        loadAddresses([0]);
-      };
-      setupWallet();
-    }
-  }, [isReady, hasWallet, createWallet, loadWallet, loadAddresses]);
+    const setupWallet = async () => {
+      if (state.status === 'NO_WALLET') {
+        await createWallet(userId);
+      } else if (state.status === 'LOCKED') {
+        // In a real app, gate this behind your own auth check
+        // (biometrics, passcode, etc.) before calling unlock.
+        await unlock(userId);
+      } else {
+        return;
+      }
+      // After the wallet is ready, load addresses for account 0
+      loadAddresses([0]);
+    };
+    setupWallet();
+  }, [state.status, createWallet, unlock, loadAddresses]);
 
   // Find the first Ethereum address from the loaded addresses
   const ethAddress = addresses.find(a => a.network === 'ethereum')?.address;
 
   return (
     <View>
-      <Text>App Status: {isReady ? 'Ready' : 'Initializing...'}</Text>
+      <Text>App Status: {state.status}</Text>
       {ethAddress ? (
         <Text>Your ETH Address: {ethAddress}</Text>
       ) : (

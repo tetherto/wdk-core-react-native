@@ -21,6 +21,7 @@
 import { AddressService } from '../../src/services/addressService'
 import { getWorkletStore } from '../../src/store/workletStore'
 import { getWalletStore } from '../../src/store/walletStore'
+import { bumpEpoch } from '../../src/utils/workletEpoch'
 
 // Mock stores
 jest.mock('../../src/store/workletStore', () => ({
@@ -322,6 +323,138 @@ describe('AddressService', () => {
 
       expect(loadingWasSetToTrue).toBe(true)
       expect(loadingWasSetToFalse).toBe(true)
+    })
+
+    it('should dedupe concurrent calls for the same key', async () => {
+      const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0'
+      mockHRPC.callMethod.mockResolvedValue({
+        result: JSON.stringify(address),
+      })
+
+      const p1 = AddressService.getAddress('ethereum', 0)
+      const p2 = AddressService.getAddress('ethereum', 0)
+      const results = await Promise.all([p1, p2])
+
+      expect(mockHRPC.callMethod).toHaveBeenCalledTimes(1)
+      expect(results).toEqual([address, address])
+    })
+
+    it('should not dedupe different keys', async () => {
+      mockHRPC.callMethod.mockResolvedValue({
+        result: JSON.stringify('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0'),
+      })
+
+      await Promise.all([
+        AddressService.getAddress('ethereum', 0),
+        AddressService.getAddress('ethereum', 1),
+        AddressService.getAddress('polygon', 0),
+      ])
+
+      expect(mockHRPC.callMethod).toHaveBeenCalledTimes(3)
+    })
+
+    it('should not dedupe calls for different wallets', async () => {
+      mockHRPC.callMethod.mockResolvedValue({
+        result: JSON.stringify('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0'),
+      })
+
+      await Promise.all([
+        AddressService.getAddress('ethereum', 0, 'wallet-a'),
+        AddressService.getAddress('ethereum', 0, 'wallet-b'),
+      ])
+
+      expect(mockHRPC.callMethod).toHaveBeenCalledTimes(2)
+    })
+
+    // Replays the sequence of setState updater functions against an initial
+    // state, mirroring how the real zustand store would apply them.
+    function replaySetStateCalls(setStateMock: jest.Mock) {
+      let state: any = {
+        walletLoading: {},
+        addresses: {},
+        balanceLoading: {},
+        lastBalanceUpdate: {},
+        balances: {},
+        activeWalletId: 'test-wallet-1',
+      }
+      for (const [updater] of setStateMock.mock.calls) {
+        state = typeof updater === 'function' ? { ...state, ...updater(state) } : { ...state, ...updater }
+      }
+      return state
+    }
+
+    // requireInitialized() awaits a couple of already-resolved promises
+    // before hrpc.callMethod is actually invoked - flush enough microtask
+    // ticks that it's guaranteed to have been called by the time we return.
+    async function flushMicrotasks(times = 10) {
+      for (let i = 0; i < times; i++) {
+        await Promise.resolve()
+      }
+    }
+
+    it('should skip the address-cache write after a worklet epoch bump, but still clear the loading flag', async () => {
+      const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0'
+      let resolveCallMethod: (value: { result: string }) => void
+      mockHRPC.callMethod.mockImplementation(
+        () => new Promise((resolve) => { resolveCallMethod = resolve }),
+      )
+
+      const pending = AddressService.getAddress('ethereum', 0, 'test-wallet-1')
+      await flushMicrotasks()
+      expect(mockHRPC.callMethod).toHaveBeenCalled()
+
+      // Simulate a wallet switch/lock happening while the fetch is in flight.
+      bumpEpoch()
+      resolveCallMethod!({ result: JSON.stringify(address) })
+
+      const result = await pending
+      expect(result).toBe(address)
+
+      // The stale fetch must not resurrect address data after the epoch changed...
+      const finalState = replaySetStateCalls(mockWalletStore.setState)
+      expect(finalState.addresses['test-wallet-1']).toBeUndefined()
+
+      // ...but it must still clear the loading flag it set, so a future
+      // getAddress call for this network/account isn't blocked forever.
+      expect(finalState.walletLoading['test-wallet-1']?.['ethereum-0']).toBe(false)
+    })
+
+    it('should clear the loading flag even when the fetch fails after an epoch bump', async () => {
+      let rejectCallMethod: (reason: Error) => void
+      mockHRPC.callMethod.mockImplementation(
+        () => new Promise((_resolve, reject) => { rejectCallMethod = reject }),
+      )
+
+      const pending = AddressService.getAddress('ethereum', 0, 'test-wallet-1')
+      await flushMicrotasks()
+      expect(mockHRPC.callMethod).toHaveBeenCalled()
+
+      bumpEpoch()
+      rejectCallMethod!(new Error('Worklet error'))
+
+      await expect(pending).rejects.toThrow('Worklet error')
+
+      const finalState = replaySetStateCalls(mockWalletStore.setState)
+      expect(finalState.walletLoading['test-wallet-1']?.['ethereum-0']).toBe(false)
+    })
+
+    it('should start a fresh fetch after an epoch bump, instead of joining the stale in-flight promise', async () => {
+      const staleAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0'
+      const freshAddress = '0x842d35Cc6634C0532925a3b844Bc9e7595f0bEb0'
+
+      mockHRPC.callMethod
+        .mockResolvedValueOnce({ result: JSON.stringify(staleAddress) })
+        .mockResolvedValueOnce({ result: JSON.stringify(freshAddress) })
+
+      const stale = AddressService.getAddress('ethereum', 0, 'test-wallet-1')
+      bumpEpoch()
+
+      const fresh = AddressService.getAddress('ethereum', 0, 'test-wallet-1')
+      const [staleResult, freshResult] = await Promise.all([stale, fresh])
+
+      expect(mockHRPC.callMethod).toHaveBeenCalledTimes(2)
+      expect(staleResult).toBe(staleAddress)
+      expect(freshResult).toBe(freshAddress)
     })
   })
 })

@@ -120,8 +120,8 @@ const DEFAULT_OPERATION_TIMEOUT_MS = 30 * 1000
  *
  * @example
  * ```typescript
- * await withOperationMutex('switchWallet', async () => {
- *   await WalletSwitchingService.switchToWallet(walletId)
+ * await withOperationMutex('unlock', async () => {
+ *   await performUnlock(walletId)
  * })
  *
  * // With custom timeout

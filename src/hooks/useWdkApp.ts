@@ -19,18 +19,44 @@
  * It provides a simple state object to determine if the WDK is ready, loading, locked, etc.
  * Must be used within WdkAppProvider.
  *
+ * ## Status meanings
+ *
+ * - `INITIALIZING` - The worklet hasn't started yet, or there isn't enough
+ *   information yet to report anything more specific (e.g. the worklet has
+ *   started but no identity or wallets are known - nothing has been
+ *   created/restored/unlocked this session, and nothing has told the SDK
+ *   who the user is).
+ * - `REINITIALIZING` - The worklet is being manually reinitialized via
+ *   `reinitializeWdk()`.
+ * - `NO_WALLET` - No wallet exists at all - confirmed empty, so this is a
+ *   genuinely fresh device/user. Safe to route to onboarding
+ *   (create/restore).
+ * - `LOCKED` - No wallet is currently unlocked. `walletId` is present when a
+ *   specific wallet is targeted (e.g. `unlock()`/`switchWallet()` was called
+ *   and is still mid-decrypt) and absent when a wallet is only known to
+ *   exist but none is currently targeted (e.g. right after `lock()`).
+ *   Either way, the correct action is the same: show your own unlock flow -
+ *   treat `walletId` as an optional hint for labeling that flow, not as a
+ *   signal to show a different screen.
+ * - `READY` - A wallet is fully unlocked and its identity has been confirmed
+ *   to match what's actually loaded. Safe to render the main app.
+ * - `ERROR` - Something failed - inspect `error` for details. Can originate
+ *   from either the worklet layer or a wallet operation (create/unlock/etc).
+ *
  * @example
  * ```tsx
  * import { useWdkApp } from '@tetherto/wdk-react-native-core'
- * 
+ *
  * function App() {
- *   const { state, retry } = useWdkApp()
+ *   const { state } = useWdkApp()
  *
  *   switch (state.status) {
  *     case 'INITIALIZING':
  *       return <LoadingScreen message="Initializing WDK..." />
  *
  *     case 'LOCKED':
+ *       // walletId is an optional hint, not a different flow - fall back to
+ *       // whatever wallet your own session logic already knows about.
  *       return <UnlockScreen walletId={state.walletId} />
  *
  *     case 'NO_WALLET':
@@ -40,7 +66,7 @@
  *       return <AppContent walletId={state.walletId} />
  *
  *     case 'ERROR':
- *       return <ErrorScreen error={state.error} onRetry={retry} />
+ *       return <ErrorScreen error={state.error} />
  *
  *     default:
  *       return <LoadingScreen />
