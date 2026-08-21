@@ -30,7 +30,11 @@ This library uses a unique **worklet bundle** to run intensive cryptographic ope
 ## Installation
 
 ### 1. Install the Core Library
+
+Install the `expo-crypto` version compatible with your app's Expo SDK, then install the core library:
+
 ```bash
+npx expo install expo-crypto
 npm install @tetherto/wdk-react-native-core
 ```
 
