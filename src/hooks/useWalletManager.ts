@@ -398,42 +398,43 @@ export function useWalletManager(): UseWalletManagerResult {
   )
 
   const deleteWallet = useCallback(
-    async (walletId: string) => {
-      if (!walletId) {
-        throw new Error('Wallet ID is required for deletion')
-      }
+    (walletId: string) =>
+      withOperationMutex('deleteWallet', async () => {
+        if (!walletId) {
+          throw new Error('Wallet ID is required for deletion')
+        }
 
-      try {
-        await WalletSetupService.deleteWallet(walletId)
+        try {
+          await WalletSetupService.deleteWallet(walletId)
 
-        walletStore.setState((prev) =>
-          produce(prev, (state) => {
-            delete state.addresses[walletId]
-            delete state.balances[walletId]
-            delete state.accountList[walletId]
-            delete state.lastBalanceUpdate[walletId]
-            delete state.walletLoading[walletId]
-            delete state.balanceLoading[walletId]
+          walletStore.setState((prev) =>
+            produce(prev, (state) => {
+              delete state.addresses[walletId]
+              delete state.balances[walletId]
+              delete state.accountList[walletId]
+              delete state.lastBalanceUpdate[walletId]
+              delete state.walletLoading[walletId]
+              delete state.balanceLoading[walletId]
 
-            state.walletList = state.walletList.filter(
-              ({ identifier }) => identifier !== walletId,
-            )
+              state.walletList = state.walletList.filter(
+                ({ identifier }) => identifier !== walletId,
+              )
 
-            if (state.activeWalletId === walletId) {
-              state.activeWalletId = null
-              state.walletLoadingState = { type: 'not_loaded' }
-            }
-          }),
-        )
+              if (state.activeWalletId === walletId) {
+                state.activeWalletId = null
+                state.walletLoadingState = { type: 'not_loaded' }
+              }
+            }),
+          )
 
-        log(
-          `[useWalletManager] Deleted wallet and cleared all data: ${walletId}`,
-        )
-      } catch (err) {
-        logError('Failed to delete wallet:', err)
-        throw err
-      }
-    },
+          log(
+            `[useWalletManager] Deleted wallet and cleared all data: ${walletId}`,
+          )
+        } catch (err) {
+          logError('Failed to delete wallet:', err)
+          throw err
+        }
+      }),
     [walletStore],
   )
 

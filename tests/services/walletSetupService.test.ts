@@ -240,6 +240,18 @@ describe('WalletSetupService', () => {
         identifier
       )
     })
+
+    it('resets the worklet if a secure-storage write fails after WDK was already initialized in-worklet', async () => {
+      (mockSecureStorage.setEncryptedSeed as jest.Mock).mockImplementationOnce(() => {
+        return Promise.reject(new Error('keychain write failed'))
+      })
+
+      await expect(
+        WalletSetupService.initializeFromMnemonic(testMnemonic)
+      ).rejects.toThrow('keychain write failed')
+
+      expect(WorkletLifecycleService.reset).toHaveBeenCalled()
+    })
   })
 
   describe('initializeWallet', () => {

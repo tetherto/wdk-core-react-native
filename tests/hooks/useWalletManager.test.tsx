@@ -489,6 +489,57 @@ describe('useWalletManager', () => {
       expect(state.walletList).toEqual([{ identifier: activeWalletId, exists: true }]);
     });
 
+    it('should prevent concurrent deleteWallet calls using mutex', async () => {
+      let resolveDelete: (value: void | PromiseLike<void>) => void;
+      const deletePromise = new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      });
+      mockWalletSetupService.deleteWallet.mockReturnValue(deletePromise);
+
+      const { result } = renderHook(() => useWalletManager());
+
+      let firstDeletePromise: Promise<void>;
+      await act(async () => {
+        firstDeletePromise = result.current.deleteWallet('wallet-1');
+      });
+
+      await expect(act(async () => {
+        await result.current.deleteWallet('wallet-2');
+      })).rejects.toThrow(/Another operation is in progress/);
+
+      await act(async () => {
+        resolveDelete!();
+        await firstDeletePromise!;
+      });
+    });
+
+    it('should prevent an unlock from running concurrently with a deleteWallet of a different wallet', async () => {
+      let resolveDelete: (value: void | PromiseLike<void>) => void;
+      const deletePromise = new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      });
+      mockWalletSetupService.deleteWallet.mockReturnValue(deletePromise);
+
+      const { result } = renderHook(() => useWalletManager());
+
+      let deleteCallPromise: Promise<void>;
+      await act(async () => {
+        deleteCallPromise = result.current.deleteWallet('unrelated-wallet');
+      });
+
+      // Without the mutex, this unlock would run concurrently with the in-flight
+      // delete's WorkletLifecycleService.reset() and could observe a WDK instance
+      // that gets disposed out from under it once the delete resolves.
+      await expect(act(async () => {
+        await result.current.unlock('wallet-to-unlock');
+      })).rejects.toThrow(/Another operation is in progress/);
+
+      await act(async () => {
+        resolveDelete!();
+        await deleteCallPromise!;
+      });
+    });
+
     it('should delegate createTemporaryWallet', async () => {
       const { result } = renderHook(() => useWalletManager());
       mockWorkletLifecycleService.generateEntropyAndEncrypt.mockResolvedValue({

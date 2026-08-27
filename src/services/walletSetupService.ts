@@ -77,6 +77,10 @@ export class WalletSetupService {
         encryptedSeed: result.encryptedSeedBuffer,
       })
     } catch (error) {
+      // No reset() here: if initializeWDK constructed a WDK instance in the
+      // worklet before failing later (e.g. bad network/protocol config),
+      // cleaning that up is pear-wrk-wdk's own responsibility as the
+      // allocator, not ours - see initializeWdkHandler in pear-wrk-wdk.
       const errorMessage = error instanceof Error ? error.message : String(error)
       const isDecryptionError = 
         errorMessage.toLowerCase().includes('decryption failed') ||
@@ -166,6 +170,10 @@ export class WalletSetupService {
         encryptedSeed: result.encryptedSeedBuffer,
       })
     } catch (error) {
+      // No reset() here: if initializeWDK constructed a WDK instance in the
+      // worklet before failing later (e.g. bad network/protocol config),
+      // cleaning that up is pear-wrk-wdk's own responsibility as the
+      // allocator, not ours - see initializeWdkHandler in pear-wrk-wdk.
       const errorMessage = error instanceof Error ? error.message : String(error)
       const isDecryptionError = 
         errorMessage.toLowerCase().includes('decryption failed') ||
@@ -190,6 +198,8 @@ export class WalletSetupService {
         await secureStorage.deleteWallet(walletId)
       } catch (cleanupError) {
         logError('Failed to cleanup partial wallet import:', cleanupError)
+      } finally {
+        WorkletLifecycleService.reset()
       }
       throw error
     }
