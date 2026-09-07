@@ -19,6 +19,7 @@
  * These schemas provide better error messages and are easier to maintain.
  */
 
+import 'zod/compile' // named compile() is tree-shaken by Metro
 import { z } from 'zod'
 
 /**
